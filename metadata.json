@@ -1,0 +1,6 @@
+{
+  "name": "CasperFlow",
+  "description": "An AI-powered autonomous DeFi yield optimization agent on the Casper Network.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+}
+
+body {
+  background: radial-gradient(circle at 10% 20%, rgba(232, 230, 240, 1) 0%, rgba(212, 208, 224, 1) 45%, rgba(200, 196, 216, 1) 90%);
+  min-height: 100vh;
+  margin: 0;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar-none to prevent visual clutter */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Mesh animation background bubbles */
+.mesh-bubble-1 {
+  position: absolute;
+  top: 10%;
+  left: 15%;
+  width: 450px;
+  height: 450px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(123, 97, 255, 0.15) 0%, rgba(123, 97, 255, 0) 70%);
+  filter: blur(60px);
+  z-index: -1;
+  animation: floatBubble1 25s infinite alternate ease-in-out;
+}
+
+.mesh-bubble-2 {
+  position: absolute;
+  bottom: 10%;
+  right: 15%;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 212, 255, 0.15) 0%, rgba(0, 212, 255, 0) 70%);
+  filter: blur(80px);
+  z-index: -1;
+  animation: floatBubble2 20s infinite alternate ease-in-out;
+}
+
+@keyframes floatBubble1 {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(100px, 50px) scale(1.15); }
+}
+
+@keyframes floatBubble2 {
+  0% { transform: translate(0, 0) scale(1.1); }
+  100% { transform: translate(-80px, -60px) scale(0.9); }
+}
