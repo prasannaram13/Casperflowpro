@@ -18,6 +18,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "casper-js-sdk": [
+        "./src/casper-js-sdk-shim.ts"
+      ],
+      "casper-js-sdk-original": [
+        "./node_modules/casper-js-sdk"
       ]
     },
     "allowImportingTsExtensions": true,

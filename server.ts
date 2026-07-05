@@ -103,6 +103,7 @@ async function startServer() {
 
     // --- TIER 2: Fallback to Public RPC JSON-RPC nodes (No API key required) ---
     const rpcNodes = [
+      { url: 'https://node.testnet.casper.network/rpc', name: 'Testnet (Official Node)' },
       { url: 'https://node-clarity-mainnet.make.services/rpc', name: 'Mainnet (Make RPC)' },
       { url: 'https://rpc.mainnet.casperlabs.io/rpc', name: 'Mainnet (CasperLabs RPC)' },
       { url: 'https://node-clarity-testnet.make.services/rpc', name: 'Testnet (Make RPC)' },
@@ -185,9 +186,9 @@ async function startServer() {
    */
   app.get("/api/casper/latest-deploy", async (req, res) => {
     const rpcNodes = [
+      'https://node.testnet.casper.network/rpc',
       'https://node-clarity-testnet.make.services/rpc',
-      'https://rpc.testnet.casperlabs.io/rpc',
-      'https://node.testnet.casper.network/rpc'
+      'https://rpc.testnet.casperlabs.io/rpc'
     ];
 
     for (const rpcUrl of rpcNodes) {
@@ -286,13 +287,8 @@ async function startServer() {
       }
     }
 
-    // fallback hash: a real-world, highly verified Casper Testnet finalized deploy hash
-    // that permanently resides on the network and is always viewable on testnet.cspr.live
-    return res.json({
-      deployHash: '4638706c80bf8529f79b90835398a69e38f175bc66c9df1fb8ba82cfb8600862',
-      blockHeight: 8329609,
-      source: 'verified static backup',
-      foundType: 'fallback'
+    return res.status(500).json({
+      error: "Could not fetch any recent deploy or transfer hash from testnet RPC nodes"
     });
   });
 
@@ -303,6 +299,7 @@ async function startServer() {
    */
   app.post("/api/casper/put-deploy", async (req, res) => {
     try {
+      console.log('BACKEND RECEIVED:', JSON.stringify(req.body, null, 2));
       let rpcBody = req.body;
       
       // Support nested formats or wrapped JSON-RPC envelope
@@ -329,10 +326,12 @@ async function startServer() {
       console.log("[PROXY-PUT-DEPLOY] Relaying signed deploy payload to Casper Testnet RPC node...");
 
       const rpcNodes = [
+        'https://node.testnet.casper.network/rpc',
         'https://node-clarity-testnet.make.services/rpc',
-        'https://rpc.testnet.casperlabs.io/rpc',
-        'https://node.testnet.casper.network/rpc'
+        'https://rpc.testnet.casperlabs.io/rpc'
       ];
+
+      const rpcErrors: string[] = [];
 
       for (const rpcUrl of rpcNodes) {
         try {
@@ -355,23 +354,26 @@ async function startServer() {
                 isSimulated: false
               });
             } else if (data && data.error) {
-              console.warn(`[PROXY-PUT-DEPLOY] Node ${rpcUrl} rejected transaction:`, data.error);
+              const errMsg = data.error.message || JSON.stringify(data.error);
+              console.warn(`[PROXY-PUT-DEPLOY] Node ${rpcUrl} rejected transaction:`, errMsg);
+              rpcErrors.push(`${rpcUrl} rejection: ${errMsg}`);
+            } else {
+              rpcErrors.push(`${rpcUrl} response: Unknown JSON-RPC body structure.`);
             }
+          } else {
+            rpcErrors.push(`${rpcUrl} HTTP error: ${response.status} ${response.statusText}`);
           }
         } catch (err: any) {
           console.error(`[PROXY-PUT-DEPLOY] Connection failed to ${rpcUrl}:`, err.message);
+          rpcErrors.push(`${rpcUrl} connection failed: ${err.message}`);
         }
       }
 
-      // Fallback for simulated wallets / sandbox mode so the UI remains fully functional
-      console.log(`[PROXY-PUT-DEPLOY] Fallback: Simulating finalization block for sandbox environment.`);
-      const simulatedHash = rpcBody?.params?.deploy?.hash || '4638706c80bf8529f79b90835398a69e38f175bc66c9df1fb8ba82cfb8600862';
-      return res.json({
-        success: true,
-        deployHash: simulatedHash,
-        isSimulated: true,
-        note: "Relayed via CasperFlow sandbox gateway.",
-        source: "CasperFlow Relayer Daemon (Simulated)"
+      console.error(`[PROXY-PUT-DEPLOY] Real on-chain broadcast failed completely. Captures:`, rpcErrors);
+      return res.status(400).json({
+        error: "On-chain broadcasting failed. Casper nodes rejected the transaction or were offline.",
+        details: rpcErrors,
+        isSimulated: false
       });
 
     } catch (e: any) {
@@ -390,9 +392,9 @@ async function startServer() {
     }
 
     const rpcNodes = [
+      'https://node.testnet.casper.network/rpc',
       'https://node-clarity-testnet.make.services/rpc',
-      'https://rpc.testnet.casperlabs.io/rpc',
-      'https://node.testnet.casper.network/rpc'
+      'https://rpc.testnet.casperlabs.io/rpc'
     ];
 
     const rpcBody = {
@@ -415,11 +417,43 @@ async function startServer() {
         if (response.ok) {
           const data: any = await response.json();
           if (data && data.result) {
-            const hasExecutionResult = data.result.execution_results && data.result.execution_results.length > 0;
+            const execution_results = data.result.execution_results || data.result.execution_info?.execution_result;
+            const finalized = !!execution_results && (Array.isArray(execution_results) ? execution_results.length > 0 : !!execution_results);
+            
+            // If finalized, let's check for execution success vs error!
+            let hasError = false;
+            let errorMessage = "";
+            
+            if (finalized) {
+              const execRes = Array.isArray(execution_results) ? execution_results[0] : execution_results;
+              const resultObj = execRes.result || execRes;
+              if (resultObj) {
+                if (resultObj.Failure) {
+                  hasError = true;
+                  errorMessage = resultObj.Failure.error_message || "Execution Failure";
+                } else if (resultObj.Success === null || (resultObj.Success === undefined && !resultObj.Version2 && !resultObj.Version1)) {
+                  // Wait, check if there is an error_message field
+                  if (resultObj.error_message) {
+                    hasError = true;
+                    errorMessage = resultObj.error_message;
+                  }
+                } else {
+                  // Check Version2/Version1 error message
+                  const successVal = resultObj.Success || resultObj.Version2 || resultObj.Version1;
+                  if (successVal && successVal.error_message) {
+                    hasError = true;
+                    errorMessage = successVal.error_message;
+                  }
+                }
+              }
+            }
+
             return res.json({
               success: true,
               result: data.result,
-              finalized: hasExecutionResult,
+              finalized: finalized,
+              hasError: hasError,
+              errorMessage: errorMessage,
               source: rpcUrl,
               isSimulated: false
             });
@@ -430,26 +464,11 @@ async function startServer() {
       }
     }
 
-    // Sandbox finalization simulation fallback
     return res.json({
       success: true,
-      finalized: true,
-      isSimulated: true,
-      result: {
-        deploy: { hash },
-        execution_results: [
-          {
-            block_hash: "0x123abc456def890123abc456def890123abc456def890123abc456def890123a",
-            result: {
-              Success: {
-                effect: { transforms: [] },
-                cost: "150000000"
-              }
-            }
-          }
-        ]
-      },
-      source: "CasperFlow State Verifier (Simulated)"
+      finalized: false,
+      isSimulated: false,
+      error: "Deploy not found or not yet finalized on any active testnet node"
     });
   });
 

@@ -10,8 +10,8 @@ export class CasperService {
   private contractHash: string;
 
   constructor(
-    nodeUrl = 'https://rpc.testnet.casper.network/rpc',
-    contractHash = 'cc4638706c80bf8529f79b90835398a69e38f175bc66c9df1fb8ba82cfb8600862'
+    nodeUrl = 'https://node.testnet.casper.network/rpc',
+    contractHash = '8f6ea1659d894e49eb2d8baed515f12e34dfa8aaf14e6f71929b5b6f0be55bcd'
   ) {
     this.nodeUrl = nodeUrl;
     this.contractHash = contractHash;
@@ -56,28 +56,40 @@ export class CasperService {
    * Dispatches a signed deploy payload to Casper Testnet RPC node via the Express backend
    */
   public async broadcastDeploy(signedDeploy: any): Promise<string> {
-    try {
-      const response = await fetch('/api/casper/put-deploy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(signedDeploy)
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.deployHash) {
-          console.log('[CasperService] Broadcast success, deploy hash:', data.deployHash);
-          return data.deployHash;
+    console.log('EXACT PAYLOAD SENT TO BACKEND:', JSON.stringify(signedDeploy, null, 2));
+    const response = await fetch('/api/casper/put-deploy', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(signedDeploy)
+    });
+    
+    if (!response.ok) {
+      let message = `HTTP ${response.status}`;
+      try {
+        const errJson = await response.json();
+        if (errJson && errJson.error) {
+          message = errJson.error;
+          if (errJson.details && Array.isArray(errJson.details)) {
+            message += ` Details: ${errJson.details.join(' | ')}`;
+          }
+        }
+      } catch (e) {
+        const rawText = await response.text().catch(() => '');
+        if (rawText) {
+          message += `: ${rawText}`;
         }
       }
-    } catch (e) {
-      console.error('[CasperService] Broadcast connection failed, fallback activated', e);
+      throw new Error(message);
     }
     
-    // Fallback static high-quality deploy hash
-    return '4638706c80bf8529f79b90835398a69e38f175bc66c9df1fb8ba82cfb8600862';
+    const data = await response.json();
+    if (data && data.deployHash) {
+      console.log('[CasperService] Broadcast success, deploy hash:', data.deployHash);
+      return data.deployHash;
+    }
+    throw new Error(data.error || 'Server did not return a deploy hash');
   }
 
   /**
@@ -101,16 +113,26 @@ export class CasperService {
         if (response.ok) {
           const data = await response.json();
           if (data && data.finalized) {
+            if (data.hasError) {
+              const errMsg = data.errorMessage || 'Execution reverted';
+              if (onStep) {
+                onStep(`[On-Chain Error] Transaction reverted: ${errMsg}`);
+              }
+              throw new Error(`Transaction reverted: ${errMsg}`);
+            }
             if (onStep) {
               onStep(`[On-Chain Finalization] Deploy hash finalized on-chain! Block resources verified.`);
             }
             return true;
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         console.log('[CasperService] Polling check failed', e);
+        if (e instanceof Error && e.message.includes('Transaction reverted')) {
+          throw e;
+        }
       }
     }
-    return true; // Return true as fallback so UI remains functional
+    return false;
   }
 }

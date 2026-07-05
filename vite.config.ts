@@ -9,6 +9,8 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        'casper-js-sdk': path.resolve(__dirname, 'src/casper-js-sdk-shim.ts'),
+        'casper-js-sdk-original': path.resolve(__dirname, 'node_modules/casper-js-sdk'),
       },
       dedupe: ['styled-components', 'react', 'react-dom'],
     },

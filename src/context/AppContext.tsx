@@ -197,7 +197,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [walletProvider, setWalletProvider] = useState<string | null>(null);
   const [isCsprClickModalOpen, setCsprClickModalOpen] = useState(false);
   const [isIframe, setIsIframe] = useState(false);
-  const [contractHash, setContractHash] = useState<string>('hash-cc4638706c80bf8529f79b90835398a69e38f175bc66c9df1fb8ba82cfb8600862');
+  const [contractHash, setContractHash] = useState<string>('hash-8f6ea1659d894e49eb2d8baed515f12e34dfa8aaf14e6f71929b5b6f0be55bcd');
 
   useEffect(() => {
     setLocalBalanceOffset(0);
