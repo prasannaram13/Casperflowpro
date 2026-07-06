@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GlassCard } from './GlassCard';
 import { useApp } from '../context/AppContext';
 import { 
@@ -18,12 +18,16 @@ import {
 } from 'lucide-react';
 
 export const SettingsPage = () => {
-  const { addLog, contractHash: globalContractHash, setContractHash: setGlobalContractHash } = useApp();
+  const { addLog, contractHash: globalContractHash, setContractHash: setGlobalContractHash, scanAccountNamedKeys, account } = useApp();
   
   // Settings State
   const [network, setNetwork] = useState('testnet');
   const [rpcNode, setRpcNode] = useState('https://rpc.testnet.casper.network/rpc');
   const [contractHash, setContractHash] = useState(globalContractHash);
+
+  useEffect(() => {
+    setContractHash(globalContractHash);
+  }, [globalContractHash]);
   const [cooldown, setCooldown] = useState(3600); // 1 hour
   const [triggerThreshold, setTriggerThreshold] = useState(2.5); // 2.5% yield gain delta
   const [slippage, setSlippage] = useState(0.5); // 0.5%
@@ -168,12 +172,28 @@ export const SettingsPage = () => {
                   <label className="text-[11px] font-bold text-[#1A1A2E]">Yield Agent Contract Hash</label>
                   <span className="text-[10px] bg-[#7B61FF]/10 text-[#7B61FF] px-1.5 py-0.5 rounded-md font-mono">Odra VM</span>
                 </div>
-                <input
-                  type="text"
-                  value={contractHash}
-                  onChange={(e) => setContractHash(e.target.value)}
-                  className="w-full px-3 py-2 bg-black/5 border border-black/5 rounded-xl text-xs font-mono text-secondary focus:outline-none focus:border-[#7B61FF]/40 focus:bg-white transition-all"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={contractHash}
+                    onChange={(e) => setContractHash(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-black/5 border border-black/5 rounded-xl text-xs font-mono text-secondary focus:outline-none focus:border-[#7B61FF]/40 focus:bg-white transition-all"
+                  />
+                  <button
+                    onClick={async () => {
+                      if (!account) {
+                        addLog("Connect your Casper wallet first to query on-chain named keys.", "warn");
+                        return;
+                      }
+                      await scanAccountNamedKeys(account);
+                    }}
+                    className="px-3 py-2 bg-[#7B61FF]/10 text-[#7B61FF] hover:bg-[#7B61FF]/20 text-[11px] font-bold rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Query account named keys via state_get_account_info"
+                  >
+                    <RefreshCw size={12} className="animate-spin-slow" />
+                    Auto-Detect
+                  </button>
+                </div>
               </div>
             </div>
           </GlassCard>

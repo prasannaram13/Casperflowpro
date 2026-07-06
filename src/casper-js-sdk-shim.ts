@@ -13,7 +13,8 @@ export const {
   CLValue,
   CLTypeString,
   CLTypeUInt32,
-  PublicKey
+  PublicKey,
+  TransferDeployItem
 } = sdk;
 
 // Define specific aliases for missing exports
@@ -52,6 +53,48 @@ if (!Deploy.prototype.toJSON) {
 }
 
 // Metaprogramming Interceptor for Deploy.prototype.approvals
+const rawToDer = (rHex: string, sHex: string): string => {
+  const rBytes: number[] = [];
+  for (let i = 0; i < 32; i++) {
+    rBytes.push(parseInt(rHex.substring(i * 2, i * 2 + 2), 16) || 0);
+  }
+  const sBytes: number[] = [];
+  for (let i = 0; i < 32; i++) {
+    sBytes.push(parseInt(sHex.substring(i * 2, i * 2 + 2), 16) || 0);
+  }
+
+  while (rBytes.length > 1 && rBytes[0] === 0) {
+    rBytes.shift();
+  }
+  if (rBytes[0] >= 0x80) {
+    rBytes.unshift(0);
+  }
+
+  while (sBytes.length > 1 && sBytes[0] === 0) {
+    sBytes.shift();
+  }
+  if (sBytes[0] >= 0x80) {
+    sBytes.unshift(0);
+  }
+
+  const rLen = rBytes.length;
+  const sLen = sBytes.length;
+  const totalLen = 2 + rLen + 2 + sLen;
+
+  const derBytes = [
+    0x30,
+    totalLen,
+    0x02,
+    rLen,
+    ...rBytes,
+    0x02,
+    sLen,
+    ...sBytes
+  ];
+
+  return derBytes.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
 const originalPush = Array.prototype.push;
 Object.defineProperty(Deploy.prototype, 'approvals', {
   get() {
@@ -77,13 +120,61 @@ Object.defineProperty(Deploy.prototype, 'approvals', {
               if (algTag !== '01' && algTag !== '02') {
                 algTag = '01';
               }
-              let sigHex = cleanSig;
-              if (sigHex.length === 128) {
-                sigHex = algTag + sigHex;
+              
+              let sigHex = '';
+              if (algTag === '01') {
+                // Ed25519 is always 64 bytes (128 hex chars)
+                if (cleanSig.length === 130 && cleanSig.startsWith('01')) {
+                  sigHex = cleanSig;
+                } else {
+                  let raw = cleanSig;
+                  if (cleanSig.length === 130 && (cleanSig.startsWith('01') || cleanSig.startsWith('02'))) {
+                    raw = cleanSig.substring(2);
+                  }
+                  if (raw.length < 128) {
+                    raw = raw.padStart(128, '0');
+                  } else if (raw.length > 128) {
+                    raw = raw.substring(0, 128);
+                  }
+                  sigHex = '01' + raw;
+                }
+              } else {
+                // Secp256k1 DER sequence check or raw check
+                if (cleanSig.startsWith('0230')) {
+                  sigHex = cleanSig;
+                } else if (cleanSig.startsWith('30')) {
+                  sigHex = '02' + cleanSig;
+                } else {
+                  // Raw/compact signature (r + s), convert to DER
+                  let raw = cleanSig;
+                  if (raw.length === 130 && raw.startsWith('02')) {
+                    raw = raw.substring(2);
+                  }
+                  
+                  let rHex = '';
+                  let sHex = '';
+                  if (raw.length <= 128) {
+                    if (raw.length >= 64) {
+                      rHex = raw.substring(0, 64);
+                      sHex = raw.substring(64).padStart(64, '0');
+                    } else {
+                      rHex = raw.substring(0, Math.floor(raw.length / 2)).padStart(64, '0');
+                      sHex = raw.substring(Math.floor(raw.length / 2)).padStart(64, '0');
+                    }
+                  } else {
+                    rHex = raw.substring(0, 64);
+                    sHex = raw.substring(64, 128);
+                  }
+
+                  const derPart = rawToDer(rHex, sHex);
+                  sigHex = '02' + derPart;
+                }
               }
-              const sigBytes = new Uint8Array(65);
-              for (let i = 0; i < 65; i++) {
-                sigBytes[i] = parseInt(sigHex.substring(i * 2, i * 2 + 2), 16);
+
+              const byteLen = Math.floor(sigHex.length / 2);
+              const sigBytes = new Uint8Array(byteLen);
+              for (let i = 0; i < byteLen; i++) {
+                sigBytes[i] = parseInt(sigHex.substring(i * 2, i * 2 + 2), 16) || 0;
               }
               
               // Use SDK's native setSignature to construct a valid internal Approval class instance

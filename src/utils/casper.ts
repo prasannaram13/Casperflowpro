@@ -7,8 +7,8 @@
  * 3. Graceful simulation fallback if both are completely blocked by sandboxed environments
  */
 
-// Use key from environment variables (Vite-supported) or fallback to provided API Key
-const API_KEY = (import.meta as any).env?.VITE_CSPR_CLOUD_API_KEY || "019f0c65-8223-7f30-a82d-57cb90e31feb";
+// Use key from environment variables (Vite-supported) or fallback to empty string
+const API_KEY = (import.meta as any).env?.VITE_CSPR_CLOUD_API_KEY || "";
 
 export async function getBalance(publicKey: string): Promise<string> {
   if (!publicKey) return "0.0000";

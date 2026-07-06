@@ -23,7 +23,7 @@ import { useApp } from '../context/AppContext';
 import { ContractDeployer, ODRA_BUILD_OUTPUTS } from '../utils/ContractDeployer';
 
 export const ContractPage = () => {
-  const { isDeployed, transactions, addLog, forceScan, deployAgent, contractHash } = useApp();
+  const { isDeployed, transactions, addLog, forceScan, deployAgent, contractHash, scanAccountNamedKeys, account } = useApp();
 
   const cleanHashForExplorer = contractHash.replace('hash-', '');
   const displayHashShort = contractHash.startsWith('hash-') 
@@ -308,9 +308,25 @@ impl YieldAgentContract {
 
               <div className="flex justify-between items-center">
                 <span className="text-secondary">Contract Hash:</span>
-                <span className="font-mono font-bold text-[#7B61FF]">
-                  {displayHashShort}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-[#7B61FF]">
+                    {displayHashShort}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      if (!account) {
+                        addLog("Connect your Casper wallet first to query on-chain named keys.", "warn");
+                        return;
+                      }
+                      await scanAccountNamedKeys(account);
+                    }}
+                    className="px-2 py-0.5 text-[#7B61FF] bg-[#7B61FF]/10 hover:bg-[#7B61FF]/20 rounded-md transition-all cursor-pointer flex items-center gap-1 text-[10px] font-bold"
+                    title="Query account named keys via state_get_account_info"
+                  >
+                    <RefreshCw size={10} className="animate-spin-slow" />
+                    <span>Scan Keys</span>
+                  </button>
+                </div>
               </div>
 
               <div className="p-2.5 rounded-xl bg-indigo-50/50 border border-indigo-100/50 space-y-1.5 text-[10px]">

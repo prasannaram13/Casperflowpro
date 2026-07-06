@@ -114,7 +114,10 @@ export class CasperService {
           const data = await response.json();
           if (data && data.finalized) {
             if (data.hasError) {
-              const errMsg = data.errorMessage || 'Execution reverted';
+              let errMsg = data.errorMessage || 'Execution reverted';
+              if (errMsg.toLowerCase().includes('invalid purse')) {
+                errMsg = "Invalid purse (This usually indicates that your wallet's main purse has insufficient CSPR balance to cover the transaction amount and the required 0.1 CSPR gas fee limit).";
+              }
               if (onStep) {
                 onStep(`[On-Chain Error] Transaction reverted: ${errMsg}`);
               }

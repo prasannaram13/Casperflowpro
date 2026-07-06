@@ -103,6 +103,9 @@ interface AppContextProps {
   // Global Configurable Contract Hash
   contractHash: string;
   setContractHash: (hash: string) => void;
+
+  // Named keys scanner
+  scanAccountNamedKeys: (pubKey: string) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextProps | undefined>(undefined);
@@ -1116,6 +1119,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addLog('Rebalance proposal declined by user. Resuming background monitor.', 'warn');
   };
 
+  const scanAccountNamedKeys = async (pubKey: string): Promise<boolean> => {
+    if (!pubKey) {
+      addLog('Cannot scan: no public key specified.', 'warn');
+      return false;
+    }
+    
+    addLog(`Initiating state_get_account_info RPC scan for address: ${pubKey.substring(0, 10)}...`, 'info');
+    
+    try {
+      const res = await fetch(`/api/casper/account-info/${pubKey}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
+      
+      const data = await res.json();
+      if (data.success && data.result?.account?.named_keys) {
+        const namedKeys = data.result.account.named_keys;
+        addLog(`Successfully retrieved account named keys from node: ${data.source}`, 'success');
+        
+        if (namedKeys.length === 0) {
+          addLog('Account named keys is empty.', 'info');
+        } else {
+          addLog(`Found ${namedKeys.length} named keys on-chain:`, 'info');
+          namedKeys.forEach((nk: any) => {
+            addLog(`  - ${nk.name}: ${nk.key}`, 'info');
+          });
+        }
+        
+        // Let's look for any named key that represents our Odra smart contract
+        const match = namedKeys.find((nk: any) => 
+          nk.name.toLowerCase().includes('yield_agent') || 
+          nk.name.toLowerCase().includes('yield_router') || 
+          nk.name.toLowerCase().includes('casper_flow') ||
+          nk.name.toLowerCase().includes('odra')
+        );
+        
+        if (match) {
+          const rawHash = match.key.replace('hash-', '');
+          const formattedHash = `hash-${rawHash}`;
+          setContractHash(formattedHash);
+          addLog(`Auto-detected Odra contract hash: ${formattedHash} under key "${match.name}". Synced!`, 'success');
+          return true;
+        } else {
+          addLog(`Contract not deployed — deploy the Odra contract first.`, 'warn');
+          return false;
+        }
+      } else {
+        throw new Error('Malformed JSON-RPC response format.');
+      }
+    } catch (err: any) {
+      console.error('Failed to scan named keys:', err);
+      addLog(`Failed to scan named keys: ${err.message || err}`, 'warn');
+      addLog(`Contract not deployed — deploy the Odra contract first.`, 'warn');
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    if (account) {
+      scanAccountNamedKeys(account);
+    }
+  }, [account]);
+
   // Simulated Market Events
   const simulateMarketEvent = (type: 'surge' | 'stable' | 'crash') => {
     addLog(`Simulating DeFi market trigger: ${type.toUpperCase()}`, 'info');
@@ -1242,6 +1309,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Global Configurable Contract Hash
         contractHash,
         setContractHash,
+        
+        // Named keys scanner
+        scanAccountNamedKeys,
       }}
     >
       {children}
