@@ -3,17 +3,17 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Default API Key fallback provided, prioritize environment variable
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "AIzaSyDbwpvaE2TA9x3Ffvf5h1K0pb7GFHPtUT4";
+// Read API Key securely from environment variable
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-const ai = new GoogleGenAI({
+const ai = GEMINI_API_KEY ? new GoogleGenAI({
   apiKey: GEMINI_API_KEY,
   httpOptions: {
     headers: {
       'User-Agent': 'aistudio-build',
     }
   }
-});
+}) : null;
 
 export interface DeFiStrategyAllocation {
   poolId: string;
@@ -73,6 +73,9 @@ Current active strategy context: "${currentStrategy}"
 Synthesize your structured analysis following the rules exactly. Ensure all allocation percentages sum to 100.`;
 
   try {
+    if (!ai) {
+      throw new Error("GEMINI_API_KEY is not configured on the server.");
+    }
     const response = await ai.models.generateContent({
       model: "gemini-3.5-flash",
       contents: prompt,
