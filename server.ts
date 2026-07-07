@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { getAgentResponse } from "./services/gemini";
+import { getAgentResponse } from "./services/gemini.js";
 import dotenv from "dotenv";
 import dns from "dns";
 
