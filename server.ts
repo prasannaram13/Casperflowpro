@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
 import { getAgentResponse } from "./services/gemini";
 import dotenv from "dotenv";
 import dns from "dns";
@@ -14,23 +13,13 @@ if (typeof dns.setDefaultResultOrder === "function") {
 // Load environment variables
 dotenv.config();
 
-// Initialize Gemini Client
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// Initialize DeepSeek Config
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
-const ai = GEMINI_API_KEY ? new GoogleGenAI({
-  apiKey: GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-}) : null;
+const app = express();
+const PORT = 3000;
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
-
-  app.use(express.json());
+app.use(express.json());
 
   // API Routes
   app.get("/api/health", (req, res) => {
@@ -844,41 +833,58 @@ Be concise, technical, professional, but engaging. Avoid verbose introductions. 
       if (history && Array.isArray(history)) {
         for (const msg of history) {
           contents.push({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: [{ text: msg.text }]
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: msg.text
           });
         }
       }
       contents.push({
         role: 'user',
-        parts: [{ text: message }]
+        content: message
       });
 
       try {
-        const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: contents as any,
-          config: {
-            systemInstruction,
-            temperature: 0.7,
+        if (!DEEPSEEK_API_KEY) {
+          throw new Error("DEEPSEEK_API_KEY is not configured.");
+        }
+
+        const response = await fetch("https://api.deepseek.com/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
           },
+          body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+              { role: "system", content: systemInstruction },
+              ...contents
+            ],
+            temperature: 0.7
+          })
         });
 
-        const rawText = response.text || "";
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`DeepSeek API error: ${response.status} - ${errText}`);
+        }
+
+        const resJson: any = await response.json();
+        const rawText = resJson.choices[0].message.content || "";
         const cleanedText = stripMarkdown(rawText);
 
         res.json({
           text: cleanedText || getLocalChatFallback(message),
         });
-      } catch (geminiError: any) {
-        console.warn("Gemini Live Service failed. Using robust local fallback...", geminiError);
+      } catch (deepseekError: any) {
+        console.warn("DeepSeek Live Service failed. Using robust local fallback...", deepseekError);
         const fallbackText = getLocalChatFallback(message);
         res.json({
           text: fallbackText,
         });
       }
     } catch (error: any) {
-      console.error("Gemini Chat API Error:", error);
+      console.error("DeepSeek Chat API Error:", error);
       const msgText = (req && req.body && req.body.message) || "";
       const fallbackText = getLocalChatFallback(msgText);
       res.json({
@@ -912,52 +918,62 @@ Rules:
 - A rebalance should be proposed (shouldRebalance = true) if the APY difference between current allocations and proposed allocations yields a combined improvement of at least +1.5% APY, or if the user's current allocation is highly inefficient.
 - Recommend 3 to 4 pools in 'newAllocations' with positive allocation percents summing to exactly 100%.`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: prompt,
-        config: {
-          systemInstruction: "You are an on-chain quantitative yield optimizer agent on Casper Network.",
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              shouldRebalance: {
-                type: Type.BOOLEAN,
-                description: "True if the new proposed allocation provides a significant yield improvement.",
-              },
-              reasoning: {
-                type: Type.STRING,
-                description: "A professional 2-3 sentence technical explanation of the analysis, the yield improvements found, and the rationalization.",
-              },
-              newAllocations: {
-                type: Type.ARRAY,
-                description: "The proposed pool allocations that sum up to exactly 100%. Include poolId, poolName, and allocationPercent.",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    poolId: { type: Type.STRING },
-                    poolName: { type: Type.STRING },
-                    allocationPercent: { type: Type.INTEGER },
-                    apy: { type: Type.NUMBER }
-                  },
-                  required: ["poolId", "poolName", "allocationPercent", "apy"]
-                }
-              },
-              expectedGain: {
-                type: Type.NUMBER,
-                description: "The expected percentage point gain in combined APY (e.g. 3.45 for +3.45% APY).",
-              },
-              gasCost: {
-                type: Type.NUMBER,
-                description: "The expected CSPR gas cost for executing the contract update. Must be a small float like 0.004.",
-              }
-            },
-            required: ["shouldRebalance", "reasoning", "newAllocations", "expectedGain", "gasCost"],
-          },
-        }
+      const systemInstruction = `You are an on-chain quantitative yield optimizer agent on Casper Network. You MUST respond with a raw JSON object matching this TypeScript interface:
+interface YieldAnalysisResponse {
+  shouldRebalance: boolean; // True if the new proposed allocation provides a significant yield improvement.
+  reasoning: string; // A professional 2-3 sentence technical explanation of the analysis, the yield improvements found, and the rationalization.
+  newAllocations: Array<{
+    poolId: string;
+    poolName: string;
+    allocationPercent: number; // Integer percent (e.g. 40)
+    apy: number;
+  }>; // The proposed pool allocations that sum up to exactly 100%.
+  expectedGain: number; // The expected percentage point gain in combined APY (e.g. 3.45).
+  gasCost: number; // The expected CSPR gas cost for executing the contract update (e.g. 0.004).
+}
+Do NOT wrap your JSON in markdown code blocks. Return only the raw JSON string.`;
+
+      if (!DEEPSEEK_API_KEY) {
+        throw new Error("DEEPSEEK_API_KEY is not configured.");
+      }
+
+      const response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            { role: "system", content: systemInstruction },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.3,
+          response_format: { type: "json_object" }
+        })
       });
 
-      const result = JSON.parse(response.text || "{}");
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`DeepSeek API error: ${response.status} - ${errText}`);
+      }
+
+      const resJson: any = await response.json();
+      const rawText = resJson.choices[0].message.content || "";
+      
+      let cleanedText = rawText.trim();
+      if (cleanedText.startsWith("```json")) {
+        cleanedText = cleanedText.substring(7);
+      } else if (cleanedText.startsWith("```")) {
+        cleanedText = cleanedText.substring(3);
+      }
+      if (cleanedText.endsWith("```")) {
+        cleanedText = cleanedText.substring(0, cleanedText.length - 3);
+      }
+      cleanedText = cleanedText.trim();
+
+      const result = JSON.parse(cleanedText);
       res.json(result);
     } catch (error: any) {
       console.warn("Gemini Analysis API failed or high demand. Using intelligent local fallback...", error);
@@ -1031,24 +1047,29 @@ Rules:
     }
   });
 
-  // Vite middleware for development
+// Export app for serverless or testing environments
+export default app;
+
+// Conditional start: Do not listen or setup Vite if in Vercel serverless environment
+if (process.env.VERCEL !== "1") {
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
+    createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
+    }).then((vite) => {
+      app.use(vite.middlewares);
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Development server running on http://0.0.0.0:${PORT}`);
+      });
     });
-    app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Production server running on port ${PORT}`);
+    });
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
-  });
 }
-
-startServer();

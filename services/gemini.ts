@@ -1,19 +1,9 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 // Read API Key securely from environment variable
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-const ai = GEMINI_API_KEY ? new GoogleGenAI({
-  apiKey: GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-}) : null;
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
 export interface DeFiStrategyAllocation {
   poolId: string;
@@ -32,11 +22,8 @@ export interface DeFiStrategyAnalysis {
 }
 
 /**
- * Executes a structured Gemini 3.5 AI model query to analyze DeFi yield opportunities
+ * Executes a structured DeepSeek AI model query to analyze DeFi yield opportunities
  * and provide an optimal allocation model on the Casper Network.
- * 
- * @param query The user's query or instruction (e.g. "Optimize for high yield", "Slightly safer mix")
- * @param context Optional parameters regarding current pools or user state
  */
 export async function getAgentResponse(query: string, context?: any): Promise<DeFiStrategyAnalysis> {
   const currentPools = context?.pools || [
@@ -65,7 +52,23 @@ Rules for Suggested Allocations:
    - BALANCED: Symmetrical exposure across Low and Medium risk (Lending, AMM, RWA, Liquid Staking). Cap high risk options at 15%.
    - AGGRESSIVE: Prioritize High APY pools (Options, Volatility Hedge, Arbitrage, High-yield AMMs) with up to 40-50% in single high-apy pools.
 4. Expected APY must be calculated mathematically as the weighted average of the proposed allocation percents and APYs.
-5. Provide a sharp, professional technical analysis answering their query directly and explaining the market rationale.`;
+5. Provide a sharp, professional technical analysis answering their query directly and explaining the market rationale.
+
+You MUST respond with a raw JSON object matching this TypeScript interface:
+interface DeFiStrategyAnalysis {
+  analysis: string; // A highly informative, technical 2-3 sentence answer directly responding to the user's query regarding their yield, strategy, or market event.
+  recommendedStrategy: 'CONSERVATIVE' | 'BALANCED' | 'AGGRESSIVE'; // The strategy profile matching the user's query.
+  suggestedAllocations: Array<{
+    poolId: string; // The exact ID string from the pool list.
+    poolName: string; // The exact name of the pool from the pool list.
+    allocationPercent: number; // Integer percent of total wallet allocation (e.g. 40 for 40%).
+    apy: number; // The APY value of the pool.
+  }>; // The chosen set of pools with positive integer allocation percents that MUST sum to exactly 100%.
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH'; // The aggregate risk level of the recommended portfolio distribution.
+  expectedAPY: number; // The mathematically calculated weighted average of APYs for this allocation.
+  reasoning: string; // Technical mathematical justification of why this pool distribution fits the profile, citing risks and rewards.
+}
+Do NOT wrap your JSON in markdown code blocks. Return only the raw JSON string.`;
 
   const prompt = `User Query: "${query}"
 Current active strategy context: "${currentStrategy}"
@@ -73,75 +76,55 @@ Current active strategy context: "${currentStrategy}"
 Synthesize your structured analysis following the rules exactly. Ensure all allocation percentages sum to 100.`;
 
   try {
-    if (!ai) {
-      throw new Error("GEMINI_API_KEY is not configured on the server.");
+    if (!DEEPSEEK_API_KEY) {
+      throw new Error("DEEPSEEK_API_KEY is not configured on the server.");
     }
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        systemInstruction,
+
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: prompt }
+        ],
         temperature: 0.3,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            analysis: {
-              type: Type.STRING,
-              description: "A highly informative, technical 2-3 sentence answer directly responding to the user's query regarding their yield, strategy, or market event."
-            },
-            recommendedStrategy: {
-              type: Type.STRING,
-              enum: ["CONSERVATIVE", "BALANCED", "AGGRESSIVE"],
-              description: "The strategy profile matching the user's query."
-            },
-            suggestedAllocations: {
-              type: Type.ARRAY,
-              description: "The chosen set of pools with positive integer allocation percents that MUST sum to exactly 100%.",
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  poolId: { type: Type.STRING, description: "The exact ID string from the pool list (e.g., '1', '2', '3')." },
-                  poolName: { type: Type.STRING, description: "The exact name of the pool from the pool list." },
-                  allocationPercent: { type: Type.INTEGER, description: "Integer percent of total wallet allocation (e.g. 40 for 40%)." },
-                  apy: { type: Type.NUMBER, description: "The APY value of the pool." }
-                },
-                required: ["poolId", "poolName", "allocationPercent", "apy"]
-              }
-            },
-            riskLevel: {
-              type: Type.STRING,
-              enum: ["LOW", "MEDIUM", "HIGH"],
-              description: "The aggregate risk level of the recommended portfolio distribution."
-            },
-            expectedAPY: {
-              type: Type.NUMBER,
-              description: "The mathematically calculated weighted average of APYs for this allocation (e.g. 28.45 for 28.45%)."
-            },
-            reasoning: {
-              type: Type.STRING,
-              description: "Technical mathematical justification of why this pool distribution fits the profile, citing risks and rewards."
-            }
-          },
-          required: ["analysis", "recommendedStrategy", "suggestedAllocations", "riskLevel", "expectedAPY", "reasoning"]
-        }
-      }
+        response_format: { type: "json_object" }
+      })
     });
 
-    if (!response.text) {
-      throw new Error("Empty response received from Gemini.");
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`DeepSeek API error: ${response.status} - ${errText}`);
     }
 
-    const data: DeFiStrategyAnalysis = JSON.parse(response.text);
+    const resJson: any = await response.json();
+    const rawText = resJson.choices[0].message.content || "";
+    
+    // Clean potential markdown blocks if deepseek ignores the rule
+    let cleanedText = rawText.trim();
+    if (cleanedText.startsWith("```json")) {
+      cleanedText = cleanedText.substring(7);
+    } else if (cleanedText.startsWith("```")) {
+      cleanedText = cleanedText.substring(3);
+    }
+    if (cleanedText.endsWith("```")) {
+      cleanedText = cleanedText.substring(0, cleanedText.length - 3);
+    }
+    cleanedText = cleanedText.trim();
+
+    const data: DeFiStrategyAnalysis = JSON.parse(cleanedText);
 
     // Double-check allocation percentage normalization to guarantee 100% sum
     let totalAlloc = data.suggestedAllocations.reduce((acc, curr) => acc + (curr.allocationPercent || 0), 0);
     if (totalAlloc !== 100 && data.suggestedAllocations.length > 0) {
-      // Fix rounding errors so the total sum is mathematically exactly 100%
       const diff = 100 - totalAlloc;
       data.suggestedAllocations[0].allocationPercent += diff;
       
-      // Re-calculate expected weighted APY with normalized allocations
       let weightedApySum = 0;
       for (const alloc of data.suggestedAllocations) {
         weightedApySum += (alloc.allocationPercent / 100) * alloc.apy;
@@ -151,7 +134,7 @@ Synthesize your structured analysis following the rules exactly. Ensure all allo
 
     return data;
   } catch (error) {
-    console.warn("Gemini Service getAgentResponse failed or high demand. Using intelligent local fallback...", error);
+    console.warn("DeepSeek Service getAgentResponse failed or high demand. Using intelligent local fallback...", error);
     
     // Intelligent local fallback strategy calculator
     const normalizedQuery = query.toLowerCase();
@@ -202,7 +185,7 @@ Synthesize your structured analysis following the rules exactly. Ensure all allo
         ],
         riskLevel: "MEDIUM",
         expectedAPY: 30.7,
-        reasoning: "Allocating 40% to Lending Alpha and 30% to AMM Beta ensures solid base yields, supplemented by a controlled 10% options position to achieve a high-performance blended APY of 30.71%."
+        reasoning: "Allocating 40% to Lending Alpha and 30% to AMM Beta ensures solid base yields, supplemented by a controlled 10% options position to achieve a high-performance blended APY of 30.71."
       };
     }
   }
