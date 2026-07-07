@@ -1,6 +1,6 @@
 import express from "express";
 import path from "path";
-import { getAgentResponse } from "./services/gemini.js";
+import { getAgentResponse } from "./services/deepseek";
 import dotenv from "dotenv";
 import dns from "dns";
 
@@ -732,7 +732,7 @@ app.use(express.json());
    * Endpoint for AI Agent chat interaction.
    * Receives the message history, current state of portfolio, pools, and active strategy.
    */
-  app.post("/api/gemini/chat", async (req, res) => {
+  app.post(["/api/agent/chat", "/api/gemini/chat"], async (req, res) => {
     try {
       const { message, history, context } = req.body;
 
@@ -896,7 +896,7 @@ Be concise, technical, professional, but engaging. Avoid verbose introductions. 
    * Endpoint for deep Agent scan optimization.
    * Uses structured JSON schema to suggest real rebalances based on market pool updates.
    */
-  app.post("/api/gemini/analyze", async (req, res) => {
+  app.post(["/api/agent/analyze", "/api/gemini/analyze"], async (req, res) => {
     try {
       const { pools, allocations, strategy } = req.body;
 
@@ -975,7 +975,7 @@ Do NOT wrap your JSON in markdown code blocks. Return only the raw JSON string.`
       const result = JSON.parse(cleanedText);
       res.json(result);
     } catch (error: any) {
-      console.warn("Gemini Analysis API failed or high demand. Using intelligent local fallback...", error);
+      console.warn("DeepSeek Analysis API failed or high demand. Using intelligent local fallback...", error);
       
       const strat = (req.body.strategy || "BALANCED").toUpperCase();
       let fallbackResult;
@@ -1027,7 +1027,7 @@ Do NOT wrap your JSON in markdown code blocks. Return only the raw JSON string.`
    * Endpoint for comprehensive, structured AI-driven DeFi strategy analysis.
    * Invokes getAgentResponse from our custom service module.
    */
-  app.post("/api/gemini/strategy-analysis", async (req, res) => {
+  app.post(["/api/agent/strategy-analysis", "/api/gemini/strategy-analysis"], async (req, res) => {
     try {
       const { query, context } = req.body;
 
@@ -1038,7 +1038,7 @@ Do NOT wrap your JSON in markdown code blocks. Return only the raw JSON string.`
       const analysisResult = await getAgentResponse(query, context);
       res.json(analysisResult);
     } catch (error: any) {
-      console.error("Gemini Strategy Analysis Error:", error);
+      console.error("DeepSeek Strategy Analysis Error:", error);
       res.status(500).json({
         error: "Failed to generate structured DeFi strategy analysis",
         details: error.message || error,

@@ -232,7 +232,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addLog('[MCP Server] Querying Model Context Protocol server availability...', 'info');
     const timer = setTimeout(() => {
       addLog('[MCP Server] Casper MCP & CSPR.trade MCP bridges connected successfully! Latency: 42ms', 'success');
-      addLog('[MCP Server] 3 tools parsed into Gemini system schema context: casper_get_account_balance, cspr_trade_swap_pools, odra_read_contract_state.', 'info');
+      addLog('[MCP Server] 3 tools parsed into DeepSeek system schema context: casper_get_account_balance, cspr_trade_swap_pools, odra_read_contract_state.', 'info');
     }, 1500);
     return () => clearTimeout(timer);
   }, []);
@@ -383,7 +383,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addLog(`Sending prompt to CasperFlow AI Agent: "${msgText.substring(0, 30)}${msgText.length > 30 ? '...' : ''}"`, 'info');
 
     try {
-      const response = await fetch('/api/gemini/chat', {
+      const response = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -752,7 +752,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // APY scan simulation
     setTimeout(() => {
       setStatus('ANALYZING');
-      addLog('Analyzing APY data and calculating optimal allocation indices with Gemini AI...', 'info');
+      addLog('Analyzing APY data and calculating optimal allocation indices with DeepSeek AI...', 'info');
 
       // Risk-adjusted yield comparisons
       setTimeout(async () => {
@@ -760,7 +760,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addLog('AI-Powered Yield Surge evaluation threshold check in progress...', 'info');
 
         try {
-          const response = await fetch('/api/gemini/analyze', {
+          const response = await fetch('/api/agent/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -777,7 +777,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const decision = await response.json();
 
           if (decision.shouldRebalance) {
-            addLog(`Yield opportunity found by Gemini! Optimization exceeds threshold. Preparing Proposal...`, 'success');
+            addLog(`Yield opportunity found by DeepSeek Agent! Optimization exceeds threshold. Preparing Proposal...`, 'success');
             addLog(`AI Reasoning: ${decision.reasoning}`, 'info');
             
             setRebalanceProposal({

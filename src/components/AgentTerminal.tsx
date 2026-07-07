@@ -100,7 +100,7 @@ export const AgentTerminal = () => {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00C853]"></span>
                   </span>
                   <span className="text-[10px] font-mono uppercase tracking-widest text-secondary font-bold">
-                    Gemini Autonomous Model Online
+                    DeepSeek Autonomous Model Online
                   </span>
                 </div>
               </div>

@@ -62,8 +62,8 @@ const response = await fetch("https://api.cspr.cloud/v1/pools/oracle", { headers
       icon: Server,
       status: 'Active',
       statusColor: 'text-[#7B61FF] bg-[#7B61FF]/10',
-      description: 'Model Context Protocol (MCP) servers (Casper MCP, CSPR.trade MCP) provide our Gemini model with direct, secure context injection and on-chain action interfaces.',
-      useCase: 'Enables our Gemini model to query live accounts, read contract states, and suggest trades by interacting with standardized JSON-RPC bridges, bypassing fragile bespoke web scrapers.',
+      description: 'Model Context Protocol (MCP) servers (Casper MCP, CSPR.trade MCP) provide our DeepSeek model with direct, secure context injection and on-chain action interfaces.',
+      useCase: 'Enables our DeepSeek model to query live accounts, read contract states, and suggest trades by interacting with standardized JSON-RPC bridges, bypassing fragile bespoke web scrapers.',
       codeSample: `// Casper MCP Server Schema Definition
 {
   "name": "casper-query-balance",
