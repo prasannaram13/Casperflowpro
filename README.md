@@ -2,7 +2,7 @@
 
 An industrial-grade, non-custodial **Autonomous Yield Routing and Portfolio Optimization Agent** integrated directly with the **Casper Network Testnet**. 
 
-CasperFlow dynamically bridges decentralization and machine intelligence. It combines client-side cryptographic wallet signing, secure server-side transaction relay with validator node failovers, continuous portfolio telemetry tracking, and an **autonomous AI Yield Optimizer** powered by Google Gemini.
+CasperFlow dynamically bridges decentralization and machine intelligence. It combines client-side cryptographic wallet signing, secure server-side transaction relay with validator node failovers, continuous portfolio telemetry tracking, and an **autonomous AI Yield Optimizer** powered by Deepseek.
 
 ---
 
@@ -50,7 +50,7 @@ The following schematic illustrates the secure pipeline connecting users, browse
                                                ┌──────────────────────────────┐
                                                │                              │
                                                │    Autonomous AI Optimizer   │
-                                               │      (Gemini API Server)     │
+                                               │      (Deepseek)     │
                                                │                              │
                                                └──────────────────────────────┘
 ```
@@ -86,11 +86,11 @@ CasperFlow adopts the architectural concepts of **x402 Micropayments & Continuou
 
 ---
 
-## 🤖 Server-Side AI Yield Optimization Agent (Gemini API)
+## 🤖 Server-Side AI Yield Optimization Agent (Deepseek API)
 
 The brain of the platform is an **autonomous server-side Yield Optimization Agent** built directly on the modern `@google/genai` (v2.4+) SDK.
 
-*   **Zero Client Exposure**: The API key (`GEMINI_API_KEY`) is securely contained on the server side via standard backend middleware. Client-side telemetry is proxied to protect developer credentials.
+*   **Zero Client Exposure**: The API key (`DEEPSEEK_API_KEY`) is securely contained on the server side via standard backend middleware. Client-side telemetry is proxied to protect developer credentials.
 *   **Dynamic Telemetry Analytics**: The AI agent regularly monitors pool metrics (TVL, APY, risk scores) and active allocations.
 *   **Structured Schema-Locked Operations**: Using structured JSON schema output, the agent evaluates if a rebalance is necessary and outputs proposals containing mathematically balanced allocations (e.g., splitting funds between lending and AMM pools) to guarantee optimal yields.
 *   **Simulation & Sandbox Fallbacks**: If the blockchain network triggers timeout limits or invalid key sequences during user demonstration, the application launches a beautiful, high-fidelity **Simulation Pipeline** linking directly to real Casper transactions to maintain a seamless user experience.
@@ -103,7 +103,7 @@ Below is the directory map detailing the location and responsibility of each pri
 
 ```text
 /
-├── server.ts                       # Full-Stack Express Server (API Proxy, Gemini API controller, Deploy submission)
+├── server.ts                       # Full-Stack Express Server (API Proxy, Deepseek API controller, Deploy submission)
 ├── README.md                       # Product Technical documentation
 ├── package.json                    # System dependencies & build configuration (ESBuild bundler)
 ├── src/
