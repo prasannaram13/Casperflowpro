@@ -1,5 +1,5 @@
-import React from 'react';
-import { Wallet, FileSignature, HardDrive, Mail, X, ArrowRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Wallet, FileSignature, HardDrive, Mail, X, ArrowRight, AlertTriangle, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useApp } from '../context/AppContext';
 
@@ -15,6 +15,20 @@ export const CsprClickModal: React.FC<CsprClickModalProps> = ({
   onSelectProvider,
 }) => {
   const { } = useApp();
+  const [isWalletDetected, setIsWalletDetected] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (isOpen) {
+      const detected = typeof window !== 'undefined' && (
+        !!window.CasperWalletProvider || 
+        !!window.casperWalletHelper || 
+        (window as any).casperWallet || 
+        (window as any).casperDash
+      );
+      setIsWalletDetected(!!detected);
+    }
+  }, [isOpen]);
+
   const providers = [
     {
       id: 'Casper Wallet',
@@ -106,6 +120,28 @@ export const CsprClickModal: React.FC<CsprClickModalProps> = ({
             </div>
 
 
+
+            {/* Wallet Detection Warning inside Modal */}
+            {!isWalletDetected && (
+              <div className="mb-4 p-4 rounded-2xl bg-red-500/[0.04] border border-red-500/15 text-xs text-red-800 leading-relaxed space-y-2">
+                <div className="flex gap-2 font-bold items-center">
+                  <AlertTriangle size={16} className="text-red-600 animate-pulse" />
+                  <span>Casper Wallet Extension Not Detected</span>
+                </div>
+                <p className="text-[11px] leading-normal text-secondary">
+                  No compatible Casper extension was detected in this browser. To authorize securely, please install the official wallet or connect with Torus.
+                </p>
+                <a
+                  href="https://casperwallet.io/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 font-bold text-[#7B61FF] hover:underline cursor-pointer"
+                >
+                  <Download size={12} />
+                  <span>Download Casper Wallet</span>
+                </a>
+              </div>
+            )}
 
             {/* Wallet Selection Grid */}
             <div className="flex flex-col gap-3">

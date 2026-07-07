@@ -20,6 +20,15 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Guarantee req.body is always an object so routes that destructure it
+// never throw a 500 on the serverless runtime, and tolerate empty bodies.
+app.use((req, _res, next) => {
+  if (req.body === undefined || req.body === null) {
+    (req as any).body = {};
+  }
+  next();
+});
+
   // API Routes
   app.get("/api/health", (req, res) => {
     res.json({ status: "healthy", timestamp: new Date().toISOString() });
@@ -1039,11 +1048,24 @@ Do NOT wrap your JSON in markdown code blocks. Return only the raw JSON string.`
       res.json(analysisResult);
     } catch (error: any) {
       console.error("DeepSeek Strategy Analysis Error:", error);
-      res.status(500).json({
-        error: "Failed to generate structured DeFi strategy analysis",
-        details: error.message || error,
-      });
+      try {
+        const fallback = await getAgentResponse(String((req.body && req.body.query) || ""), req.body && req.body.context);
+        res.json(fallback);
+      } catch (inner: any) {
+        res.status(500).json({
+          error: "Failed to generate structured DeFi strategy analysis",
+          details: inner?.message || String(inner),
+        });
+      }
     }
+  });
+
+  // Global error handler: surfaces the real reason in logs and returns JSON
+  // instead of a bare 500 HTML page (which the UI reports as "status 500").
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error("Unhandled server error:", err);
+    if (res.headersSent) return;
+    res.status(500).json({ error: "Internal server error", details: err?.message || String(err) });
   });
 
 // Export app for serverless or testing environments

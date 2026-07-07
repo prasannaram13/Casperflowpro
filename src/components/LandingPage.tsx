@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Bot, 
@@ -14,7 +14,10 @@ import {
   Percent, 
   Flame, 
   Zap,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle,
+  Download,
+  RefreshCw
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -24,6 +27,23 @@ interface LandingPageProps {
 export const LandingPage: React.FC<LandingPageProps> = ({ connect }) => {
   const [sliderAmount, setSliderAmount] = useState<number>(5000);
   const [selectedStrategy, setSelectedStrategy] = useState<'CONSERVATIVE' | 'BALANCED' | 'AGGRESSIVE'>('BALANCED');
+  const [isWalletDetected, setIsWalletDetected] = useState<boolean>(true);
+
+  useEffect(() => {
+    const checkWallet = () => {
+      const detected = typeof window !== 'undefined' && (
+        !!window.CasperWalletProvider || 
+        !!window.casperWalletHelper || 
+        (window as any).casperWallet || 
+        (window as any).casperDash
+      );
+      setIsWalletDetected(!!detected);
+    };
+    checkWallet();
+    // Re-check after 1s just in case of script injection latency
+    const t = setTimeout(checkWallet, 1000);
+    return () => clearTimeout(t);
+  }, []);
 
   // Interactive mock data based on strategy selected
   const strategyDetails = {
@@ -145,14 +165,54 @@ export const LandingPage: React.FC<LandingPageProps> = ({ connect }) => {
             </div>
           </div>
 
-          {/* Locked Message Callout */}
-          <div className="p-4 rounded-2xl bg-amber-500/[0.04] border border-amber-500/20 flex gap-3 text-xs text-amber-800 leading-relaxed max-w-xl">
-            <ShieldCheck size={20} className="text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold block mb-0.5">Authorization Gated Access Only</span>
-              To protect on-chain vaults and leverage real-time Casper smart contract routing, you must connect a valid Casper Network account. No gas is consumed on initial handshake.
+          {/* Wallet Connection / Download Status */}
+          {!isWalletDetected ? (
+            <div className="p-5 rounded-2xl bg-red-500/[0.04] border border-red-500/20 flex flex-col gap-4 text-xs max-w-xl shadow-sm">
+              <div className="flex gap-3 text-red-800 leading-relaxed">
+                <AlertTriangle size={22} className="text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-sm block mb-1">Casper Wallet Extension Not Detected</span>
+                  We could not detect the official Casper Wallet browser extension. To access CasperFlow's autonomous yield optimization agent and safeguard vaults on the Casper Network, please download the official wallet extension.
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <a
+                  href="https://casperwallet.io/download"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-all shadow-md cursor-pointer decoration-none"
+                  id="download-casper-wallet-btn"
+                >
+                  <Download size={14} />
+                  <span>Download Casper Wallet</span>
+                </a>
+                <button
+                  onClick={() => {
+                    const detected = typeof window !== 'undefined' && (
+                      !!window.CasperWalletProvider || 
+                      !!window.casperWalletHelper || 
+                      (window as any).casperWallet || 
+                      (window as any).casperDash
+                    );
+                    setIsWalletDetected(!!detected);
+                    connect();
+                  }}
+                  className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white hover:bg-gray-50 text-[#1A1A2E] border border-black/10 text-xs font-bold transition-all cursor-pointer"
+                >
+                  <RefreshCw size={14} />
+                  <span>Retry / Connect Anyway</span>
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="p-4 rounded-2xl bg-amber-500/[0.04] border border-amber-500/20 flex gap-3 text-xs text-amber-800 leading-relaxed max-w-xl">
+              <ShieldCheck size={20} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block mb-0.5">Authorization Gated Access Only</span>
+                To protect on-chain vaults and leverage real-time Casper smart contract routing, you must connect a valid Casper Network account. No gas is consumed on initial handshake.
+              </div>
+            </div>
+          )}
 
           {/* Connect Button Big Call */}
           <div className="pt-2 flex flex-col sm:flex-row gap-3">
