@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { getAgentResponse } from "./services/gemini.js";
 import dotenv from "dotenv";
 import dns from "dns";
@@ -1053,13 +1052,15 @@ export default app;
 // Conditional start: Do not listen or setup Vite if in Vercel serverless environment
 if (process.env.VERCEL !== "1") {
   if (process.env.NODE_ENV !== "production") {
-    createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    }).then((vite) => {
-      app.use(vite.middlewares);
-      app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Development server running on http://0.0.0.0:${PORT}`);
+    import("vite").then((viteModule) => {
+      viteModule.createServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      }).then((vite) => {
+        app.use(vite.middlewares);
+        app.listen(PORT, "0.0.0.0", () => {
+          console.log(`Development server running on http://0.0.0.0:${PORT}`);
+        });
       });
     });
   } else {
