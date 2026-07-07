@@ -10,7 +10,6 @@ CasperFlow dynamically bridges decentralization and machine intelligence. It com
 
 For total auditability, transparency, and validation, the live application and a landmark on-chain transaction are fully indexed and verifiable:
 
-*   **⚡ Live Production dApp**: [https://ais-pre-pdzd3guxffb7rdlyikr442-124989178892.asia-east1.run.app](https://ais-pre-pdzd3guxffb7rdlyikr442-124989178892.asia-east1.run.app)
 *   **⛓️ Casper Testnet-4 Verified Transaction (Explorer)**: [8f6ea1659d894e49eb2d8baed515f12e34dfa8aaf14e6f71929b5b6f0be55bcd](https://testnet.cspr.live/deploy/8f6ea1659d894e49eb2d8baed515f12e34dfa8aaf14e6f71929b5b6f0be55bcd)
 *   **🏦 On-Chain Strategy Treasury**: `02022d91547c49c815bcfda31000d9549278598b2c3df2c1cb41807bcd0f5cd17332`
 
