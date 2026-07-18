@@ -71,29 +71,33 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         });
       }
 
-      // Casper 1.x JSON-RPC requires params to be a named CLValue array.
-      // Sending { params: { deploy } } produces the node's "Invalid params".
+      // Casper Testnet's live sidecar expects the legacy deploy wrapper here.
+      // Its params shape is { deploy }, not a named array.
       payload = {
         jsonrpc: "2.0",
         id: payload?.id || Date.now(),
         method: "account_put_deploy",
-        params: [{ name: "deploy", value: deploy }],
+        params: { deploy },
       };
 
       const failures: string[] = [];
       for (const rpcUrl of TESTNET_RPC_NODES) {
         try {
           const { response, data } = await rpcRequest(rpcUrl, payload);
-          if (response.ok && data?.result?.deploy_hash) {
+          const deployHash = data?.result?.deploy_hash || data?.result?.value?.deploy_hash;
+          if (response.ok && deployHash) {
             return res.status(200).json({
               success: true,
-              deployHash: data.result.deploy_hash,
+              deployHash,
               result: data.result,
               source: rpcUrl,
               isSimulated: false,
             });
           }
-          failures.push(`${rpcUrl}: ${data?.error?.message || `HTTP ${response.status}`}`);
+          const nodeError = data?.error
+            ? `${data.error.message || "RPC rejected deploy"}${data.error.data ? ` (${data.error.data})` : ""}`
+            : `HTTP ${response.status}`;
+          failures.push(`${rpcUrl}: ${nodeError}`);
         } catch (error: any) {
           failures.push(`${rpcUrl}: ${error?.message || "connection failed"}`);
         }
