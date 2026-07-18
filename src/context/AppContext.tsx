@@ -410,7 +410,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err: any) {
       console.error("AI Chat connection failed:", err);
       const errTime = new Date().toTimeString().split(' ')[0];
-      setAiChatMessages(prev => [...prev, { role: 'model', text: `Connection issue: ${err.message || err}. Please ensure your Port 3000 server is active.`, timestamp: errTime }]);
+      setAiChatMessages(prev => [...prev, { role: 'model', text: `Connection issue: ${err.message || err}. Please try again or check the server deployment.`, timestamp: errTime }]);
       addLog(`AI agent chat error: ${err.message || err}`, 'warn');
     } finally {
       setIsAiThinking(false);
