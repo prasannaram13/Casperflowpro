@@ -57,8 +57,8 @@ export const SettingsPage = () => {
   const handleReset = () => {
     setNetwork('testnet');
     setRpcNode('https://rpc.testnet.casper.network/rpc');
-    setContractHash('hash-8f6ea1659d894e49eb2d8baed515f12e34dfa8aaf14e6f71929b5b6f0be55bcd');
-    setGlobalContractHash('hash-8f6ea1659d894e49eb2d8baed515f12e34dfa8aaf14e6f71929b5b6f0be55bcd');
+    setContractHash('');
+    setGlobalContractHash('');
     setCooldown(3600);
     setTriggerThreshold(2.5);
     setSlippage(0.5);
