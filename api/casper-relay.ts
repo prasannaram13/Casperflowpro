@@ -49,7 +49,12 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
   if (req.method === "POST" && endpoint === "put-deploy") {
     try {
       let payload = jsonBody(req.body);
-      const deploy = payload?.params?.deploy || payload?.deploy;
+      const deploy =
+        payload?.params?.deploy ||
+        payload?.deploy ||
+        (Array.isArray(payload?.params)
+          ? payload.params.find((item: any) => item?.name === "deploy")?.value
+          : undefined);
 
       if (!deploy?.header?.account || !Array.isArray(deploy?.approvals) || deploy.approvals.length === 0) {
         return res.status(400).json({
@@ -66,14 +71,14 @@ export default async function handler(req: RequestLike, res: ResponseLike) {
         });
       }
 
-      if (!payload?.method) {
-        payload = {
-          jsonrpc: "2.0",
-          id: Date.now(),
-          method: "account_put_deploy",
-          params: { deploy },
-        };
-      }
+      // Casper 1.x JSON-RPC requires params to be a named CLValue array.
+      // Sending { params: { deploy } } produces the node's "Invalid params".
+      payload = {
+        jsonrpc: "2.0",
+        id: payload?.id || Date.now(),
+        method: "account_put_deploy",
+        params: [{ name: "deploy", value: deploy }],
+      };
 
       const failures: string[] = [];
       for (const rpcUrl of TESTNET_RPC_NODES) {
