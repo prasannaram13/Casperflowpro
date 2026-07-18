@@ -825,7 +825,7 @@ export const TransactionProducerModal = () => {
           cleanContractHash = cleanContractHash.substring(2);
         }
         if (cleanContractHash.length !== 64) {
-          cleanContractHash = '8f6ea1659d894e49eb2d8baed515f12e34dfa8aaf14e6f71929b5b6f0be55bcd';
+          throw new Error('No valid deployed contract hash is configured. Scan the connected account or enter the contract hash in Settings.');
         }
         
         session.storedContractByHash = new StoredContractByHash(
@@ -1016,7 +1016,7 @@ export const TransactionProducerModal = () => {
           cleanContractHash = cleanContractHash.substring(2);
         }
         if (cleanContractHash.length !== 64) {
-          cleanContractHash = '8f6ea1659d894e49eb2d8baed515f12e34dfa8aaf14e6f71929b5b6f0be55bcd';
+          throw new Error('No valid deployed contract hash is configured. Scan the connected account or enter the contract hash in Settings.');
         }
         
         session.storedContractByHash = new StoredContractByHash(
@@ -1129,12 +1129,9 @@ export const TransactionProducerModal = () => {
         }
       }
 
-      // 3. Fallback for sandbox simulation mode
+      // Real transaction mode: never fabricate a signature.
       if (!signed && !extensionPresent) {
-        addConsoleLog('No Casper Wallet extension or Casper Signer found. Pre-generating mock signature for offline sandbox mode.');
-        // Pre-generate mock 64-byte signature prefixed with algorithm tag 01 (Ed25519) or 02 (Secp256k1)
-        sigHex = '01' + 'a'.repeat(128);
-        signed = true;
+        throw new Error('No Casper Wallet or Casper Signer was found. Connect a real wallet to sign this transaction.');
       }
     } catch (e: any) {
       console.error('Direct Casper extension check error:', e);
@@ -1230,13 +1227,10 @@ export const TransactionProducerModal = () => {
           addConsoleLog('✅ Cryptographic verification PASSED! Local signature is valid for this deploy hash.');
         } else {
           addConsoleLog('⚠️ WARNING: Local signature verification returned FALSE or failed. This indicates the signature might be invalid.');
-          if (signature.startsWith('01' + 'a'.repeat(10))) {
-            addConsoleLog('Ignoring signature check for mock sandbox signature.');
-          } else {
-            throw new Error('Local cryptographic signature verification failed! The signature is mathematically invalid for this deploy hash.');
-          }
+          throw new Error('Local cryptographic signature verification failed. The wallet signature does not match this deploy.');
         }
       } catch (verifyErr: any) {
+        throw verifyErr;
         addConsoleLog(`⚠️ Signature Verification Warning: ${verifyErr.message || verifyErr}`);
       }
 
@@ -1275,6 +1269,9 @@ export const TransactionProducerModal = () => {
       const broadcastedHash = await casperService.broadcastDeploy(deployPayload);
       if (broadcastedHash) {
         addConsoleLog(`Relay response received! Assigned Deploy Hash: ${broadcastedHash}`);
+        if (broadcastedHash.startsWith('sim-')) {
+          throw new Error('The relay returned a simulated hash. Simulated transactions are disabled.');
+        }
         
         // Check if the returned hash is a simulated/mock hash
         if (broadcastedHash.startsWith('sim-')) {
@@ -1317,6 +1314,10 @@ export const TransactionProducerModal = () => {
       }
     } catch (err: any) {
       console.warn('Broadcast or finalization encountered a network or consensus limit:', err);
+      addConsoleLog(`Real transaction failed: ${err.message || err}`);
+      setStep(3);
+      setProgressText(`Transaction was not confirmed: ${err.message || err}`);
+      return;
       addConsoleLog(`⚠️ Network/Consensus Limit: ${err.message || err}`);
       addConsoleLog('[Sandbox Transport] Activating automated demo simulation protocol...');
       addConsoleLog('Assembling fallback transfer instructions using cryptographic signatures...');

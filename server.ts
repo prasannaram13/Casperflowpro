@@ -427,15 +427,9 @@ app.use((req, _res, next) => {
       }
 
       if (isSimulatedSigner || isMockSignature) {
-        console.log(`[PROXY-PUT-DEPLOY] Detected simulation/sandbox deploy (signer: ${signerAddress}, isMockSig: ${isMockSignature}). Returning mock deploy hash.`);
-        const mockHash = "sim-" + Array.from({length: 30}, () => Math.floor(Math.random()*16).toString(16)).join("");
-        return res.json({
-          success: true,
-          deployHash: mockHash,
-          result: {
-            deploy_hash: mockHash
-          },
-          isSimulated: true
+        return res.status(400).json({
+          error: "A real Casper wallet signature is required. Simulated signers and mock signatures are disabled.",
+          isSimulated: false
         });
       }
 
