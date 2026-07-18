@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
-import { getAgentResponse } from "./services/deepseek";
+// Keep the extension explicit so Vercel's ESM serverless bundler includes it.
+import { getAgentResponse } from "./services/deepseek.ts";
 import dotenv from "dotenv";
 import dns from "dns";
 
