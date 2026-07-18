@@ -1,10 +1,6 @@
-import { createRequire } from "node:module";
-
-// Vercel runs this function as ESM. The production build emits the Express
-// API as CommonJS, so load that compiled artifact explicitly instead of
-// importing the TypeScript source with an extensionless path.
-const require = createRequire(import.meta.url);
-const serverModule = require("../dist/server.cjs");
-const app = serverModule.default ?? serverModule;
+// The explicit extension lets Vercel trace and bundle the Express API with
+// this serverless entry point. The former extensionless import was emitted as
+// `../server` and failed at runtime on Vercel's ESM Node environment.
+import app from "../server.ts";
 
 export default app;
