@@ -11,6 +11,8 @@
   "rewrites": [
     { "source": "/api/agent/chat", "destination": "/api/agent-chat" },
     { "source": "/api/casper/:endpoint*", "destination": "/api/casper-relay?endpoint=:endpoint*" },
+    { "source": "/api/mcp", "destination": "/api/mcp.ts" },
+    { "source": "/api/x402", "destination": "/api/x402.ts" },
     { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]

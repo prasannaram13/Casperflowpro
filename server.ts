@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
-import { getAgentResponse } from "./services/deepseek";
+// Keep the extension explicit so Vercel's ESM serverless bundler includes it.
+import { getAgentResponse } from "./services/deepseek.ts";
 import dotenv from "dotenv";
 import dns from "dns";
 
@@ -167,12 +168,9 @@ app.use((req, _res, next) => {
       }
     }
 
-    // --- TIER 4: Fallback to simulated / sandbox default only if the account public key is a mock or completely inactive ---
-    console.log(`[PROXY] Using sandbox simulation for public key: ${pubKey}`);
-    return res.json({ 
-      balance: 2500.0, 
-      note: "Standard CasperFlow sandbox balance.", 
-      isSimulated: true 
+    return res.status(503).json({
+      error: "Live Casper balance is unavailable; no simulated balance is returned.",
+      isSimulated: false
     });
   });
 
@@ -228,34 +226,7 @@ app.use((req, _res, next) => {
       }
     }
 
-    // Fallback: If in sandbox or account doesn't exist yet on-chain, return a simulation-friendly format
-    // showing some dummy named keys so the app works beautifully for mock/sandbox addresses too.
-    if (pubKey.startsWith('01') || pubKey.startsWith('02')) {
-      console.log(`[PROXY-ACCOUNT-INFO] Returning simulated mock named keys for sandbox address: ${pubKey}`);
-      return res.json({
-        success: true,
-        source: "Sandbox Emulator",
-        result: {
-          account: {
-            account_hash: "account-hash-sandbox-mock-value",
-            named_keys: [
-              {
-                name: "yield_agent",
-                key: "hash-8f6ea1659d894e49eb2d8baed515f12e34dfa8aaf14e6f71929b5b6f0be55bcd"
-              }
-            ],
-            main_purse: "uref-sandbox-mock-main-purse-value",
-            associated_keys: [],
-            action_thresholds: {
-              deployment: 1,
-              key_management: 1
-            }
-          }
-        }
-      });
-    }
-
-    return res.status(400).json({
+    return res.status(503).json({
       error: "Failed to fetch account info from Casper nodes",
       details: rpcErrors
     });

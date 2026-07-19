@@ -5,10 +5,8 @@ import { CasperService } from '../services/CasperService';
 import { 
   Deploy, DeployHeader, ExecutableDeployItem, Args, CLValue, 
   CLValueUInt512, CLValueString, PublicKey, ContractHash,
-  CLTypeString, CLTypeUInt32, StoredContractByHash, TransferDeployItem
+  CLTypeString, CLTypeUInt32, StoredContractByHash
 } from 'casper-js-sdk';
-
-const POOL_TREASURY_PUBLIC_KEY = "02022d91547c49c815bcfda31000d9549278598b2c3df2c1cb41807bcd0f5cd17332";
 
 const rawToDer = (rHex: string, sHex: string): string => {
   const rBytes: number[] = [];
@@ -52,6 +50,37 @@ const rawToDer = (rHex: string, sHex: string): string => {
   return derBytes.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
+// Casper encodes secp256k1 approvals as algorithm tag 02 followed by the
+// fixed-width r || s values. Casper Wallet returns an ASN.1 DER signature,
+// so convert the DER integers into two 32-byte, zero-padded values.
+const derToCasperSecp256k1 = (value: string): string | null => {
+  let hex = value.toLowerCase().replace(/^0x/, '').trim();
+  if (hex.startsWith('02')) hex = hex.substring(2);
+  if (!hex.startsWith('30')) return null;
+
+  let offset = 2;
+  const sequenceLength = parseInt(hex.substring(offset, offset + 2), 16);
+  if (!Number.isFinite(sequenceLength)) return null;
+  offset += 2;
+  if (hex.length < offset + sequenceLength * 2 || hex.substring(offset, offset + 2) !== '02') return null;
+
+  offset += 2;
+  const rLength = parseInt(hex.substring(offset, offset + 2), 16);
+  if (!Number.isFinite(rLength)) return null;
+  offset += 2;
+  const r = hex.substring(offset, offset + rLength * 2);
+  offset += rLength * 2;
+  if (hex.substring(offset, offset + 2) !== '02') return null;
+
+  offset += 2;
+  const sLength = parseInt(hex.substring(offset, offset + 2), 16);
+  if (!Number.isFinite(sLength)) return null;
+  offset += 2;
+  const s = hex.substring(offset, offset + sLength * 2);
+  const compact = (part: string) => part.replace(/^0+(?=[0-9a-f])/, '').padStart(64, '0').slice(-64);
+  return `02${compact(r)}${compact(s)}`;
+};
+
 const parseSignatureHex = (sigHex: string, publicKey: string) => {
   let cleanHex = sigHex.toLowerCase().replace(/^0x/, '').trim();
   
@@ -82,35 +111,17 @@ const parseSignatureHex = (sigHex: string, publicKey: string) => {
       finalSigHex = '01' + raw;
     }
   } else {
-    // Secp256k1 signature: can be compact (64 bytes / 128 hex) or DER encoded
+    // Keep the SDK's DER representation for local Deploy signature
+    // verification. The RPC serializer converts it to compact Casper form.
     if (cleanHex.startsWith('0230')) {
       finalSigHex = cleanHex;
     } else if (cleanHex.startsWith('30')) {
       finalSigHex = '02' + cleanHex;
     } else {
-      // Raw/compact signature (r + s), convert to DER
-      let raw = cleanHex;
-      if (raw.length === 130 && raw.startsWith('02')) {
-        raw = raw.substring(2);
-      }
-      
-      let rHex = '';
-      let sHex = '';
-      if (raw.length <= 128) {
-        if (raw.length >= 64) {
-          rHex = raw.substring(0, 64);
-          sHex = raw.substring(64).padStart(64, '0');
-        } else {
-          rHex = raw.substring(0, Math.floor(raw.length / 2)).padStart(64, '0');
-          sHex = raw.substring(Math.floor(raw.length / 2)).padStart(64, '0');
-        }
-      } else {
-        rHex = raw.substring(0, 64);
-        sHex = raw.substring(64, 128);
-      }
-
-      const derPart = rawToDer(rHex, sHex);
-      finalSigHex = '02' + derPart;
+      let raw = cleanHex.startsWith('02') ? cleanHex.substring(2) : cleanHex;
+      let rHex = raw.substring(0, 64).padStart(64, '0');
+      let sHex = raw.substring(64, 128).padStart(64, '0');
+      finalSigHex = '02' + rawToDer(rHex, sHex);
     }
   }
 
@@ -184,6 +195,14 @@ const serializeDeployToCasperRpcJson = (deploy: any, currentAddress?: string, si
   
   // Use SDK's own static Deploy.toJSON method to generate spec-compliant JSON
   const sdkJson = Deploy.toJSON(deploy);
+
+  const rpcSignature = (value: string, signer: string) => {
+    if (!value || !signer?.toLowerCase().startsWith('02')) return value;
+    const compact = derToCasperSecp256k1(value);
+    if (compact) return compact;
+    const raw = value.toLowerCase().replace(/^0x/, '').replace(/^02/, '');
+    return `02${raw.padStart(128, '0').substring(0, 128)}`;
+  };
   
   const approvals: any[] = [];
   if (signature && currentAddress) {
@@ -193,13 +212,13 @@ const serializeDeployToCasperRpcJson = (deploy: any, currentAddress?: string, si
     }
     approvals.push({
       signer: cleanAddress,
-      signature: signature
+      signature: rpcSignature(signature, cleanAddress)
     });
   } else if (sdkJson.approvals && Array.isArray(sdkJson.approvals)) {
     sdkJson.approvals.forEach((app: any) => {
       approvals.push({
         signer: app.signer,
-        signature: app.signature
+        signature: rpcSignature(app.signature, app.signer)
       });
     });
   }
@@ -390,35 +409,12 @@ const normalizeSignature = (sig: string, publicKey: string): string => {
       return '01' + raw;
     }
   } else {
-    if (cleanHex.startsWith('0230')) {
-      return cleanHex;
-    } else if (cleanHex.startsWith('30')) {
-      return '02' + cleanHex;
-    } else {
-      // Raw/compact signature (r + s), convert to DER
-      let raw = cleanHex;
-      if (raw.length === 130 && raw.startsWith('02')) {
-        raw = raw.substring(2);
-      }
-      
-      let rHex = '';
-      let sHex = '';
-      if (raw.length <= 128) {
-        if (raw.length >= 64) {
-          rHex = raw.substring(0, 64);
-          sHex = raw.substring(64).padStart(64, '0');
-        } else {
-          rHex = raw.substring(0, Math.floor(raw.length / 2)).padStart(64, '0');
-          sHex = raw.substring(Math.floor(raw.length / 2)).padStart(64, '0');
-        }
-      } else {
-        rHex = raw.substring(0, 64);
-        sHex = raw.substring(64, 128);
-      }
-
-      const derPart = rawToDer(rHex, sHex);
-      return '02' + derPart;
-    }
+    if (cleanHex.startsWith('0230')) return cleanHex;
+    if (cleanHex.startsWith('30')) return '02' + cleanHex;
+    let raw = cleanHex.startsWith('02') ? cleanHex.substring(2) : cleanHex;
+    const rHex = raw.substring(0, 64).padStart(64, '0');
+    const sHex = raw.substring(64, 128).padStart(64, '0');
+    return '02' + rawToDer(rHex, sHex);
   }
 };
 
@@ -777,8 +773,8 @@ export const TransactionProducerModal = () => {
       let paymentLimit = '3000000000'; // default 3 CSPR
       if (activeTxToProduce.type === 'Deploy') {
         paymentLimit = '5000000000'; // 5 CSPR for deploy
-      } else if (activeTxToProduce.type === 'Deposit') {
-        paymentLimit = '100000000'; // 0.1 CSPR for native transfer
+      } else if (activeTxToProduce.type === 'Deposit' || activeTxToProduce.type === 'Withdraw' || activeTxToProduce.type === 'Rebalance') {
+        paymentLimit = '3000000000'; // contract execution payment; amount is a contract argument
       }
       const payment = ExecutableDeployItem.standardPayment(paymentLimit);
       
@@ -802,24 +798,7 @@ export const TransactionProducerModal = () => {
       
       const session = new ExecutableDeployItem();
       
-      if (activeTxToProduce.type === 'Deposit') {
-        const amountCspr = parseFloat(activeTxToProduce.amount || '0');
-        const amountMotes = BigInt(Math.round(amountCspr * 1_000_000_000));
-        
-        // 8. Minimum transfer on Casper is 2.5 CSPR (2500000000 motes)
-        if (amountMotes < 2500000000n) {
-          throw new Error("Validation Failed: Minimum transfer on Casper is 2.5 CSPR (2,500,000,000 motes). Please enter an amount of 2.5 CSPR or higher.");
-        }
-        
-        const transferId = activeTxToProduce.poolId ? Number(activeTxToProduce.poolId) : 1;
-        
-        session.transfer = TransferDeployItem.newTransfer(
-          amountMotes.toString(),
-          PublicKey.fromHex(POOL_TREASURY_PUBLIC_KEY),
-          undefined,
-          transferId
-        );
-      } else {
+      if (activeTxToProduce.type === 'Deposit' || activeTxToProduce.type === 'Withdraw' || activeTxToProduce.type === 'Rebalance' || activeTxToProduce.type === 'Deploy') {
         let cleanContractHash = contractHash.replace('hash-', '').replace('0x', '').trim();
         if (cleanContractHash.length === 66 && cleanContractHash.startsWith('cc')) {
           cleanContractHash = cleanContractHash.substring(2);
@@ -833,6 +812,8 @@ export const TransactionProducerModal = () => {
           entrypoint,
           Args.fromMap(clArgsMap)
         );
+      } else {
+        throw new Error('Unsupported transaction type. Configure a contract call before broadcasting.');
       }
       
       const deploy = Deploy.makeDeploy(header, payment, session);
@@ -968,8 +949,8 @@ export const TransactionProducerModal = () => {
       let paymentLimit = '3000000000'; // default 3 CSPR
       if (activeTxToProduce.type === 'Deploy') {
         paymentLimit = '5000000000'; // 5 CSPR for deploy
-      } else if (activeTxToProduce.type === 'Deposit') {
-        paymentLimit = '100000000'; // 0.1 CSPR for native transfer
+      } else if (activeTxToProduce.type === 'Deposit' || activeTxToProduce.type === 'Withdraw' || activeTxToProduce.type === 'Rebalance') {
+        paymentLimit = '3000000000'; // contract execution payment; amount is a contract argument
       }
       const payment = ExecutableDeployItem.standardPayment(paymentLimit);
       
@@ -993,24 +974,7 @@ export const TransactionProducerModal = () => {
       
       const session = new ExecutableDeployItem();
       
-      if (activeTxToProduce.type === 'Deposit') {
-        const amountCspr = parseFloat(activeTxToProduce.amount || '0');
-        const amountMotes = BigInt(Math.round(amountCspr * 1_000_000_000));
-        
-        // 8. Minimum transfer on Casper is 2.5 CSPR (2500000000 motes)
-        if (amountMotes < 2500000000n) {
-          throw new Error("Validation Failed: Minimum transfer on Casper is 2.5 CSPR (2,500,000,000 motes). Please enter an amount of 2.5 CSPR or higher.");
-        }
-        
-        const transferId = activeTxToProduce.poolId ? Number(activeTxToProduce.poolId) : 1;
-        
-        session.transfer = TransferDeployItem.newTransfer(
-          amountMotes.toString(),
-          PublicKey.fromHex(POOL_TREASURY_PUBLIC_KEY),
-          undefined,
-          transferId
-        );
-      } else {
+      if (activeTxToProduce.type === 'Deposit' || activeTxToProduce.type === 'Withdraw' || activeTxToProduce.type === 'Rebalance' || activeTxToProduce.type === 'Deploy') {
         let cleanContractHash = contractHash.replace('hash-', '').replace('0x', '').trim();
         if (cleanContractHash.length === 66 && cleanContractHash.startsWith('cc')) {
           cleanContractHash = cleanContractHash.substring(2);
@@ -1024,6 +988,8 @@ export const TransactionProducerModal = () => {
           entrypoint,
           Args.fromMap(clArgsMap)
         );
+      } else {
+        throw new Error('Unsupported transaction type. Configure a contract call before broadcasting.');
       }
       
       const deploy = Deploy.makeDeploy(header, payment, session);
@@ -1046,18 +1012,12 @@ export const TransactionProducerModal = () => {
       addConsoleLog(' [Safety Audit] Standard payment limit argument verified.');
 
       // 2. Verify contract call or transfer session arguments are not empty
-      if (activeTxToProduce.type === 'Deposit') {
-        const transferArgs = serializeArgs(deploy.session?.transfer);
-        if (!transferArgs || transferArgs.length === 0) {
-          throw new Error("Serialization validation failed: Session transfer arguments are empty!");
-        }
-        addConsoleLog(` [Safety Audit] Native transfer session arguments verified (${transferArgs.length} compiled arguments detected).`);
-      } else {
+      {
         const sessionArgs = serializeArgs(deploy.session?.storedContractByHash);
         if (!sessionArgs || sessionArgs.length === 0) {
-          throw new Error("Serialization validation failed: Session contract arguments (amount/pool_id) are empty! Contract call must contain valid compiled arguments.");
+          throw new Error("Serialization validation failed: Session contract arguments are empty! Contract call must contain valid compiled arguments.");
         }
-        addConsoleLog(` [Safety Audit] Session contract arguments verified (${sessionArgs.length} compiled arguments detected).`);
+        addConsoleLog(` [Safety Audit] Stored contract call arguments verified (${sessionArgs.length} compiled arguments detected).`);
       }
 
       // 4. Only THEN validate the header account matches the connected wallet key
@@ -1245,7 +1205,9 @@ export const TransactionProducerModal = () => {
       }
 
       // Serialize deploy to JSON using SDK's canonical method
-      const deployJson = Deploy.toJSON(signedDeploy);
+      // Keep the SDK/DER signature for local verification, but serialize the
+      // broadcast payload with Casper's compact secp256k1 approval format.
+      const deployJson = serializeDeployToCasperRpcJson(signedDeploy);
 
       const deployPayload = {
         jsonrpc: "2.0",

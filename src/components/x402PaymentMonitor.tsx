@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Coins, 
@@ -26,101 +26,13 @@ interface MicropaymentReceipt {
 }
 
 export const X402PaymentMonitor = () => {
-  const { addLog, balance, addToast } = useApp();
-  const [totalCost, setTotalCost] = useState<number>(0.084);
+  const { addLog, balance } = useApp();
+  const [totalCost, setTotalCost] = useState<number>(0);
   const [validatingId, setValidatingId] = useState<string | null>(null);
   const [validationSuccess, setValidationSuccess] = useState<boolean | null>(null);
   const [validationStep, setValidationStep] = useState<string>('');
   
-  const [receipts, setReceipts] = useState<MicropaymentReceipt[]>([
-    {
-      id: 'rcpt-101',
-      endpoint: '/api/v1/pools/oracle-tvl',
-      timestamp: 'Just now',
-      costCspr: 0.002,
-      hash: '0x3f5c1e2d8a4b6f709b1c3b4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b',
-      status: 'PROVED',
-      apiResponseSize: '1.4 KB'
-    },
-    {
-      id: 'rcpt-100',
-      endpoint: '/api/v1/agent/yield-index',
-      timestamp: '2 mins ago',
-      costCspr: 0.005,
-      hash: '0x9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b',
-      status: 'PROVED',
-      apiResponseSize: '4.8 KB'
-    },
-    {
-      id: 'rcpt-099',
-      endpoint: '/api/v1/pools/historical-apy',
-      timestamp: '8 mins ago',
-      costCspr: 0.003,
-      hash: '0x1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d',
-      status: 'PROVED',
-      apiResponseSize: '12.2 KB'
-    },
-    {
-      id: 'rcpt-098',
-      endpoint: '/api/v1/analytics/divergence-loss',
-      timestamp: '15 mins ago',
-      costCspr: 0.005,
-      hash: '0xf5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b7a6f5e4',
-      status: 'PROVED',
-      apiResponseSize: '8.4 KB'
-    }
-  ]);
-
-  // Periodically increment requests slightly to simulate background agent work paying per request
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const endpoints = [
-        '/api/v1/pools/oracle-tvl',
-        '/api/v1/agent/yield-index',
-        '/api/v1/pools/historical-apy'
-      ];
-      const randomEndpoint = endpoints[Math.floor(Math.random() * endpoints.length)];
-      const cost = Math.random() > 0.5 ? 0.002 : 0.003;
-      const newId = `rcpt-${Math.floor(Math.random() * 1000) + 200}`;
-      const hash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-
-      const newReceipt: MicropaymentReceipt = {
-        id: newId,
-        endpoint: randomEndpoint,
-        timestamp: 'Just now',
-        costCspr: cost,
-        hash,
-        status: 'PROVED',
-        apiResponseSize: `${(Math.random() * 10 + 1).toFixed(1)} KB`
-      };
-
-      setReceipts(prev => [newReceipt, ...prev.slice(0, 5)]);
-      setTotalCost(prev => parseFloat((prev + cost).toFixed(4)));
-
-      // Determine human-friendly purpose
-      let purpose = 'API call verification';
-      if (randomEndpoint.includes('oracle-tvl')) {
-        purpose = 'Fetching real-time Oracle Pool TVL statistics';
-      } else if (randomEndpoint.includes('yield-index')) {
-        purpose = 'Updating dynamic Casper Yield Indexes';
-      } else if (randomEndpoint.includes('historical-apy')) {
-        purpose = 'Analyzing historical Pool APY trends';
-      }
-
-      // Trigger the custom toast notification
-      addToast({
-        title: 'x402 Micropayment Proof Generated',
-        message: `Peer-to-peer data settlement succeeded for ${randomEndpoint}`,
-        type: 'payment',
-        cost: `${cost} CSPR`,
-        timestamp: new Date().toLocaleTimeString(),
-        purpose,
-        duration: 8000
-      });
-    }, 12000); // add one every 12 seconds for active real-time feeling
-
-    return () => clearInterval(interval);
-  }, [addToast]);
+  const [receipts] = useState<MicropaymentReceipt[]>([]);
 
   const handleValidateReceipt = (receipt: MicropaymentReceipt) => {
     if (validatingId) return;
@@ -129,23 +41,20 @@ export const X402PaymentMonitor = () => {
     setValidationStep('Reading HTTP Response Headers: looking for X-402-Payment-Receipt...');
     addLog(`Initiating x402 Cryptographic validation for Receipt ${receipt.id}...`, 'info');
 
-    setTimeout(() => {
-      setValidationStep('Extracting transaction hash & Casper signature proofs...');
-    }, 1000);
-
-    setTimeout(() => {
-      setValidationStep('Querying on-chain state to confirm balance deduction & transfer success...');
-    }, 2000);
-
-    setTimeout(() => {
-      setValidationStep('Validating matching cryptographic digest between client token & provider public key...');
-    }, 3000);
-
-    setTimeout(() => {
-      setValidationStep('Verification complete! Proof is 100% valid on Casper Testnet.');
+    setValidationStep('Checking the referenced deploy on Casper Testnet...');
+    fetch(`/api/x402?resource=${encodeURIComponent(receipt.endpoint)}`, {
+      headers: { 'X-402-Payment-Receipt': JSON.stringify({ deploy_hash: receipt.hash.replace(/^0x/, '') }) }
+    }).then(async response => {
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
+      setValidationStep('Verification complete: Casper deploy exists on Testnet.');
       setValidationSuccess(true);
-      addLog(`Validation success! receipt ${receipt.id} is cryptographically valid. Status code: HTTP 200 (Verified)`, 'success');
-    }, 4000);
+      addLog(`x402 receipt ${receipt.id} verified against Casper Testnet deploy ${receipt.hash}.`, 'success');
+    }).catch(error => {
+      setValidationStep(error instanceof Error ? error.message : 'Payment proof could not be verified.');
+      setValidationSuccess(false);
+      addLog(`x402 receipt ${receipt.id} verification failed.`, 'warn');
+    }).finally(() => setValidatingId(null));
   };
 
   const clearValidation = () => {

@@ -18,9 +18,9 @@ export interface MCPStatus {
 }
 
 export class MCPConnectionService {
-  private static serverUrl: string = "https://node-clarity-testnet.make.services/mcp";
-  private static isConnected: boolean = true;
-  private static latency: number = 42;
+  private static serverUrl: string = "/api/mcp";
+  private static isConnected: boolean = false;
+  private static latency: number = 0;
 
   private static mcpToolsList: MCPTool[] = [
     {
@@ -75,22 +75,20 @@ export class MCPConnectionService {
     return {
       status: this.isConnected ? 'CONNECTED' : 'DISCONNECTED',
       serverUrl: this.serverUrl,
-      latencyMs: this.isConnected ? Math.floor(this.latency + Math.random() * 8 - 4) : 0,
+      latencyMs: this.isConnected ? this.latency : 0,
       availableToolsCount: this.mcpToolsList.length
     };
   }
 
-  /**
-   * Simulates querying the on-chain Casper account balance via MCP JSON-RPC
-   */
   public static async queryChainAccount(publicKey: string): Promise<{ balance: number; blockHeight: number; verifiedOnChain: boolean }> {
-    // Standard Model Context Protocol call simulation
-    await this.simulateDelay(800);
-    return {
-      balance: 2500.0,
-      blockHeight: 3141592,
-      verifiedOnChain: true
-    };
+    const started = performance.now();
+    const response = await fetch(this.serverUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'tools/call', params: { name: 'casper_get_account_balance', arguments: { publicKey } } }) });
+    const data: any = await response.json();
+    if (!response.ok || data?.error) throw new Error(data?.error?.message || 'MCP account query failed');
+    const parsed = JSON.parse(data.result.content[0].text);
+    this.latency = Math.round(performance.now() - started);
+    this.isConnected = true;
+    return { balance: parsed.balanceCspr, blockHeight: 0, verifiedOnChain: true };
   }
 
   /**
@@ -100,16 +98,9 @@ export class MCPConnectionService {
     publicKey: string, 
     allocations: { poolName: string; allocationPercent: number }[]
   ): Promise<{ success: boolean; txHash: string; gasSpentMot: string }> {
-    await this.simulateDelay(1200);
-    const txHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-    return {
-      success: true,
-      txHash,
-      gasSpentMot: "4000000" // 0.004 CSPR
-    };
-  }
-
-  private static simulateDelay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    const response = await fetch(this.serverUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'tools/call', params: { name: 'cspr_trade_swap_pools', arguments: { fromPool: allocations[0]?.poolName, toPool: allocations[1]?.poolName, amountMot: '0' } } }) });
+    const data: any = await response.json();
+    if (!response.ok || data?.error) throw new Error(data?.error?.message || 'MCP trade requires wallet approval');
+    return { success: true, txHash: '', gasSpentMot: '' };
   }
 }

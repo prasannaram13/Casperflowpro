@@ -11,7 +11,7 @@ export class CasperService {
 
   constructor(
     nodeUrl = 'https://node.testnet.casper.network/rpc',
-    contractHash = '8f6ea1659d894e49eb2d8baed515f12e34dfa8aaf14e6f71929b5b6f0be55bcd'
+    contractHash = ''
   ) {
     this.nodeUrl = nodeUrl;
     this.contractHash = contractHash;

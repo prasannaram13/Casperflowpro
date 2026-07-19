@@ -4,7 +4,7 @@
  * Implements account balance queries via:
  * 1. Direct authenticated CSPR.cloud API (highly reliable on client-side if CORS is supported)
  * 2. Server-side proxy API (alternative if client-side is CORS-blocked)
- * 3. Graceful simulation fallback if both are completely blocked by sandboxed environments
+ * 3. Zero balance when live sources are unavailable; never invent a balance.
  */
 
 // Use key from environment variables (Vite-supported) or fallback to empty string
@@ -80,9 +80,6 @@ export async function getBalance(publicKey: string): Promise<string> {
     console.log("[casper.ts] Server-side balance proxy failed:", e);
   }
 
-  // 3. Fallback: If both direct and proxy failed (e.g., sandboxed container has no outbound access,
-  // or user is playing with an inactive wallet / mock account), we return an elegant fallback balance
-  // to ensure they can fully interact with the yield allocation, rebalancing, and optimization dashboard.
-  console.log(`[casper.ts] All live balance pathways failed/blocked. Providing elegant default simulated balance.`);
-  return "2500.0000";
+  console.warn(`[casper.ts] All live balance pathways failed or were unavailable. Returning zero rather than a simulated balance.`);
+  return "0.0000";
 }
