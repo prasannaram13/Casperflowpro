@@ -5,7 +5,7 @@
  */
 
 use odra::prelude::*;
-use odra::{Address, Var, List, Event};
+use odra::{Address, Var, Mapping, List, Event};
 
 /// Structure representing a registered DeFi liquidity pool on Casper Network
 #[derive(Clone, PartialEq, Debug, odra::OdraType)]
@@ -62,6 +62,8 @@ pub struct YieldAgentContract {
     last_rebalance: Var<u64>,
     /// Cooling period interval for rebalances
     min_rebalance_interval: Var<u64>,
+    /// User accounting used by the app's deposit/withdraw entry points.
+    balances: Mapping<Address, U512>,
 }
 
 #[odra::module]
@@ -146,6 +148,29 @@ impl YieldAgentContract {
             new_strategy,
             tx_hash,
         });
+    }
+
+    /// Records a user's allocation in contract storage.
+    pub fn deposit(&mut self, amount: U512, pool_id: u8) {
+        assert!(amount > U512::zero(), "Deposit amount must be positive");
+        let caller = odra::contract_env::caller();
+        let current = self.balances.get(&caller).unwrap_or(U512::zero());
+        self.balances.set(&caller, current + amount);
+        let _ = pool_id;
+    }
+
+    /// Reduces a user's recorded allocation in contract storage.
+    pub fn withdraw(&mut self, amount: U512, pool_id: u8) {
+        assert!(amount > U512::zero(), "Withdrawal amount must be positive");
+        let caller = odra::contract_env::caller();
+        let current = self.balances.get(&caller).unwrap_or(U512::zero());
+        assert!(current >= amount, "Insufficient recorded balance");
+        self.balances.set(&caller, current - amount);
+        let _ = pool_id;
+    }
+
+    pub fn get_user_balance(&self, user: Address) -> U512 {
+        self.balances.get(&user).unwrap_or(U512::zero())
     }
 
     /// Returns the currently active portfolio strategy on-chain

@@ -39,9 +39,10 @@ export interface PreparedDeployTx {
 export const ODRA_BUILD_OUTPUTS: OdraBuildOutputs = {
   contractName: "yield_agent_contract",
   framework: "Odra Framework (Rust)",
-  version: "v0.8.0",
-  compiledSizeKb: 48.2,
-  wasmHash: "8b9e4a3f2b1d0c5e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e",
+  version: "not built",
+  compiledSizeKb: 0,
+  // Populated only after cargo-odra builds the WASM and a real install deploy is finalized.
+  wasmHash: "",
   storageLayout: [
     { name: "owner", type: "Address", description: "Cryptographic Address of the owner who initialized the contract" },
     { name: "min_rebalance_interval", type: "Var<u32>", description: "Cooldown time in seconds required between successive rebalances" },
@@ -50,10 +51,23 @@ export const ODRA_BUILD_OUTPUTS: OdraBuildOutputs = {
   ],
   entrypoints: [
     {
-      name: "initialize",
+      name: "init",
+      args: [],
+      access: "Public"
+    },
+    {
+      name: "deposit",
       args: [
-        { name: "min_interval", type: "u32" },
-        { name: "initial_strategy", type: "String" }
+        { name: "amount", type: "U512" },
+        { name: "pool_id", type: "u8" }
+      ],
+      access: "Public"
+    },
+    {
+      name: "withdraw",
+      args: [
+        { name: "amount", type: "U512" },
+        { name: "pool_id", type: "u8" }
       ],
       access: "Public"
     },
@@ -88,7 +102,7 @@ export class ContractDeployer {
    * parameterized with target allocations.
    */
   public static prepareDeploymentTx(strategyName: string, allocations: { poolName: string; allocationPercent: number }[]): PreparedDeployTx {
-    const deployHash = "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    const deployHash = "";
     
     // Prepare entrypoint args
     const poolNames = allocations.map(a => a.poolName);

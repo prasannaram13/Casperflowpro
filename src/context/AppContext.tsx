@@ -211,7 +211,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // MCP Connection Service integration
-  const [mcpConnected, setMcpConnected] = useState(true);
+  const [mcpConnected, setMcpConnected] = useState(false);
   const mcpToolsList = MCPConnectionService.getAvailableTools();
 
   const mcpQueryAccount = async (pubKey: string) => {
@@ -224,16 +224,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const mcpExecuteUpdate = async (pubKey: string, allocs: any[]) => {
     addLog(`[MCP Server] Sending instruction: cspr_trade_swap_pools to rebalance portfolio...`, 'info');
     const res = await MCPConnectionService.executePortfolioUpdate(pubKey, allocs);
-    addLog(`[MCP Server] Transaction approved. Deployed transaction hash: ${res.txHash}`, 'success');
+    addLog(`[MCP Server] Trade preparation returned without broadcast. Wallet approval is required before any transaction is sent.`, 'warn');
     return res;
   };
 
   useEffect(() => {
     addLog('[MCP Server] Querying Model Context Protocol server availability...', 'info');
-    const timer = setTimeout(() => {
-      addLog('[MCP Server] Casper MCP & CSPR.trade MCP bridges connected successfully! Latency: 42ms', 'success');
-      addLog('[MCP Server] 3 tools parsed into DeepSeek system schema context: casper_get_account_balance, cspr_trade_swap_pools, odra_read_contract_state.', 'info');
-    }, 1500);
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch('/api/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'tools/list' }) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        setMcpConnected(true);
+        addLog('[MCP Server] MCP bridge connected. Tools discovered from the server endpoint.', 'success');
+      } catch (error) {
+        setMcpConnected(false);
+        addLog(`[MCP Server] MCP bridge unavailable: ${error instanceof Error ? error.message : 'request failed'}`, 'warn');
+      }
+    }, 0);
     return () => clearTimeout(timer);
   }, []);
 
@@ -495,7 +502,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const initialBal = activeAccount.balance ? parseFloat(activeAccount.balance) / 1_000_000_000 : 0;
               setBalance(isNaN(initialBal) ? 0 : initialBal);
             } else {
-              setBalance(15420.5);
+              setBalance(0);
             }
           }
         } catch (e) {
@@ -528,7 +535,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const initialBal = acc.balance ? parseFloat(acc.balance) / 1_000_000_000 : 0;
           setBalance(isNaN(initialBal) ? 0 : initialBal);
         } else {
-          setBalance(15420.5);
+          setBalance(0);
         }
       }
     };
@@ -550,7 +557,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const initialBal = acc.balance ? parseFloat(acc.balance) / 1_000_000_000 : 0;
           setBalance(isNaN(initialBal) ? 0 : initialBal);
         } else {
-          setBalance(15420.5);
+          setBalance(0);
         }
       }
     };
@@ -609,7 +616,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               } else if (!isSimulatedAddress(activeAddress)) {
                 setBalance(0);
               } else {
-                setBalance(15420.5);
+                setBalance(0);
               }
               return;
             }
@@ -642,7 +649,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               } else if (!isSimulatedAddress(activeAddress)) {
                 setBalance(0);
               } else {
-                setBalance(8240.25);
+                setBalance(0);
               }
               return;
             }
@@ -687,39 +694,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const initialBal = accountInfo.balance ? parseFloat(accountInfo.balance) / 1_000_000_000 : 0;
             setBalance(isNaN(initialBal) ? 0 : initialBal);
           } else {
-            setBalance(15420.5);
+            setBalance(0);
           }
           return;
         }
       } catch (e) {
-        console.log(`[WALLET] Using optimized sandbox simulation for ${provider}`);
+        console.warn(`[WALLET] Real CSPR.click connection failed for ${provider}. Sandbox wallet simulation is disabled.`);
       }
     }
 
-    // 3. Fallback or Simulation for non-installed wallets or simulated provider selections
-    let simulatedAddress = '';
-    let simBalance = 450.0;
-    
-    if (provider === 'Casper Wallet') {
-      simulatedAddress = '017a3f5b9c1d8e2d4f5a6b7c8d9e0f1a2b3c4d5e6f7a3f5b9c1d8e2d4f5a6b7c8d';
-      simBalance = 15420.5;
-    } else if (provider === 'Casper Signer') {
-      simulatedAddress = '0129f12d8e4f5a6b7c8d9e0f1a2b3c4d5e6f7a3f5b9c1d8e2d4f5a6b7c8d9e0f';
-      simBalance = 8240.25;
-    } else if (provider === 'Ledger') {
-      simulatedAddress = '02a4f5a6b7c8d9e0f1a2b3c4d5e6f7a3f5b9c1d8e2d4f5a6b7c8d9e0f1a2b3c4';
-      simBalance = 125000.0;
-    } else { // Torus
-      simulatedAddress = '01fb9c1d8e2d4f5a6b7c8d9e0f1a2b3c4d5e6f7a3f5b9c1d8e2d4f5a6b7c8d9e';
-      simBalance = 450.0;
-    }
-
-    setAccount(simulatedAddress);
-    setBalance(simBalance);
-    setIsConnected(true);
-    setWalletProvider(provider);
-    setCsprClickModalOpen(false);
-    addLog(`Connected to sandbox (${provider}). Account: ${simulatedAddress.substring(0, 8)}...`, 'success');
+    setAccount(null);
+    setBalance(0);
+    setIsConnected(false);
+    addLog(`Unable to connect ${provider}. Install or unlock a real CSPR.click wallet before signing transactions.`, 'warn');
   };
 
   const disconnect = async () => {
@@ -1091,16 +1078,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLocalTransactions((prev) => [newTx, ...prev]);
         addLog(`Rebalance transaction confirmed! Hash: ${txHash.substring(0, 8)}...`, 'success');
 
-        // Trigger a special x402 micropayment for contract execution verification
-        addToast({
-          title: 'x402 Micropayment Proof Generated',
-          message: 'Cryptographic proof-of-payment submitted for on-chain state verification',
-          type: 'payment',
-          cost: '0.0010 CSPR',
-          timestamp: new Date().toLocaleTimeString(),
-          purpose: 'Micropayment verification for Odra Yield Router contract execution',
-          duration: 8000
-        });
+        addLog('Contract execution finalized. An x402 receipt can be verified through /api/x402 using the finalized deploy hash.', 'info');
         
         setRebalanceProposal(null);
 

@@ -1,5 +1,15 @@
 # 🌐 CasperFlow: Autonomous Agentic Yield Router & Portfolio Optimizer
 
+## Integration status
+
+- **CSPR.click** signs Casper deploys in the connected browser wallet; private keys remain in the wallet.
+- **CSPR.cloud** is used for live Testnet account data when configured with `CSPR_CLOUD_API_KEY`.
+- **MCP** is exposed at `/api/mcp` with live account-balance and Odra state reads. Trade execution stops before signing and requires the wallet flow.
+- **x402** is exposed at `/api/x402`: it returns HTTP 402 payment requirements and verifies a supplied Casper Testnet deploy receipt.
+- **Odra** contract sources are in `contracts/`; Deposit/Withdraw/Rebalance calls require a deployed contract hash in Settings.
+
+The UI does not invent MCP transaction hashes, x402 receipt hashes, balances, or contract deployment success messages.
+
 An industrial-grade, non-custodial **Autonomous Yield Routing and Portfolio Optimization Agent** integrated directly with the **Casper Network Testnet**. 
 
 CasperFlow dynamically bridges decentralization and machine intelligence. It combines client-side cryptographic wallet signing, secure server-side transaction relay with validator node failovers, continuous portfolio telemetry tracking, and an **autonomous AI Yield Optimizer** powered by Deepseek.

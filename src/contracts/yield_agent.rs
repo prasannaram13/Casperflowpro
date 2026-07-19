@@ -49,6 +49,9 @@ pub struct YieldAgent {
     allocations: Mapping<u8, u8>, // mapping from pool_id to allocation_percent
     /// Total Value Locked (TVL) managed by the agent
     total_managed_tvl: Var<U512>,
+    /// User accounting state changed by deposit/withdraw contract calls.
+    balances: Mapping<Address, U512>,
+    last_pool_by_user: Mapping<Address, u8>,
 }
 
 #[odra::module]
@@ -100,6 +103,44 @@ impl YieldAgent {
         } else {
             odra::contract_env::revert(odra::ExecutionError::User(102)); // Pool Not Found
         }
+    }
+
+    /// Records a user's deposit allocation in contract storage.
+    /// The amount is expressed in motes and is intentionally explicit in the
+    /// runtime arguments so the signed deploy is auditable by the frontend.
+    pub fn deposit(&mut self, amount: U512, pool_id: u8) {
+        if amount == U512::zero() {
+            odra::contract_env::revert(odra::ExecutionError::User(104));
+        }
+        if self.pools.get(&pool_id).is_none() {
+            odra::contract_env::revert(odra::ExecutionError::User(102));
+        }
+        let caller = odra::contract_env::caller();
+        let current = self.balances.get_or_default(&caller);
+        self.balances.set(&caller, current + amount);
+        self.last_pool_by_user.set(&caller, pool_id);
+        let total = self.total_managed_tvl.get_or_default();
+        self.total_managed_tvl.set(total + amount);
+    }
+
+    /// Reduces the caller's recorded position in contract storage.
+    pub fn withdraw(&mut self, amount: U512, pool_id: u8) {
+        if amount == U512::zero() {
+            odra::contract_env::revert(odra::ExecutionError::User(105));
+        }
+        let caller = odra::contract_env::caller();
+        let current = self.balances.get_or_default(&caller);
+        if current < amount {
+            odra::contract_env::revert(odra::ExecutionError::User(106));
+        }
+        self.balances.set(&caller, current - amount);
+        self.last_pool_by_user.set(&caller, pool_id);
+        let total = self.total_managed_tvl.get_or_default();
+        self.total_managed_tvl.set(total - amount);
+    }
+
+    pub fn get_user_balance(&self, user: Address) -> U512 {
+        self.balances.get_or_default(&user)
     }
 
     /// Entry point to update the allocation distribution across pools, optimizing yield

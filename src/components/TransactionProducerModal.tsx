@@ -5,10 +5,8 @@ import { CasperService } from '../services/CasperService';
 import { 
   Deploy, DeployHeader, ExecutableDeployItem, Args, CLValue, 
   CLValueUInt512, CLValueString, PublicKey, ContractHash,
-  CLTypeString, CLTypeUInt32, StoredContractByHash, TransferDeployItem
+  CLTypeString, CLTypeUInt32, StoredContractByHash
 } from 'casper-js-sdk';
-
-const POOL_TREASURY_PUBLIC_KEY = "02022d91547c49c815bcfda31000d9549278598b2c3df2c1cb41807bcd0f5cd17332";
 
 const rawToDer = (rHex: string, sHex: string): string => {
   const rBytes: number[] = [];
@@ -775,8 +773,8 @@ export const TransactionProducerModal = () => {
       let paymentLimit = '3000000000'; // default 3 CSPR
       if (activeTxToProduce.type === 'Deploy') {
         paymentLimit = '5000000000'; // 5 CSPR for deploy
-      } else if (activeTxToProduce.type === 'Deposit') {
-        paymentLimit = '100000000'; // 0.1 CSPR for native transfer
+      } else if (activeTxToProduce.type === 'Deposit' || activeTxToProduce.type === 'Withdraw' || activeTxToProduce.type === 'Rebalance') {
+        paymentLimit = '3000000000'; // contract execution payment; amount is a contract argument
       }
       const payment = ExecutableDeployItem.standardPayment(paymentLimit);
       
@@ -800,24 +798,7 @@ export const TransactionProducerModal = () => {
       
       const session = new ExecutableDeployItem();
       
-      if (activeTxToProduce.type === 'Deposit') {
-        const amountCspr = parseFloat(activeTxToProduce.amount || '0');
-        const amountMotes = BigInt(Math.round(amountCspr * 1_000_000_000));
-        
-        // 8. Minimum transfer on Casper is 2.5 CSPR (2500000000 motes)
-        if (amountMotes < 2500000000n) {
-          throw new Error("Validation Failed: Minimum transfer on Casper is 2.5 CSPR (2,500,000,000 motes). Please enter an amount of 2.5 CSPR or higher.");
-        }
-        
-        const transferId = activeTxToProduce.poolId ? Number(activeTxToProduce.poolId) : 1;
-        
-        session.transfer = TransferDeployItem.newTransfer(
-          amountMotes.toString(),
-          PublicKey.fromHex(POOL_TREASURY_PUBLIC_KEY),
-          undefined,
-          transferId
-        );
-      } else {
+      if (activeTxToProduce.type === 'Deposit' || activeTxToProduce.type === 'Withdraw' || activeTxToProduce.type === 'Rebalance' || activeTxToProduce.type === 'Deploy') {
         let cleanContractHash = contractHash.replace('hash-', '').replace('0x', '').trim();
         if (cleanContractHash.length === 66 && cleanContractHash.startsWith('cc')) {
           cleanContractHash = cleanContractHash.substring(2);
@@ -831,6 +812,8 @@ export const TransactionProducerModal = () => {
           entrypoint,
           Args.fromMap(clArgsMap)
         );
+      } else {
+        throw new Error('Unsupported transaction type. Configure a contract call before broadcasting.');
       }
       
       const deploy = Deploy.makeDeploy(header, payment, session);
@@ -966,8 +949,8 @@ export const TransactionProducerModal = () => {
       let paymentLimit = '3000000000'; // default 3 CSPR
       if (activeTxToProduce.type === 'Deploy') {
         paymentLimit = '5000000000'; // 5 CSPR for deploy
-      } else if (activeTxToProduce.type === 'Deposit') {
-        paymentLimit = '100000000'; // 0.1 CSPR for native transfer
+      } else if (activeTxToProduce.type === 'Deposit' || activeTxToProduce.type === 'Withdraw' || activeTxToProduce.type === 'Rebalance') {
+        paymentLimit = '3000000000'; // contract execution payment; amount is a contract argument
       }
       const payment = ExecutableDeployItem.standardPayment(paymentLimit);
       
@@ -991,24 +974,7 @@ export const TransactionProducerModal = () => {
       
       const session = new ExecutableDeployItem();
       
-      if (activeTxToProduce.type === 'Deposit') {
-        const amountCspr = parseFloat(activeTxToProduce.amount || '0');
-        const amountMotes = BigInt(Math.round(amountCspr * 1_000_000_000));
-        
-        // 8. Minimum transfer on Casper is 2.5 CSPR (2500000000 motes)
-        if (amountMotes < 2500000000n) {
-          throw new Error("Validation Failed: Minimum transfer on Casper is 2.5 CSPR (2,500,000,000 motes). Please enter an amount of 2.5 CSPR or higher.");
-        }
-        
-        const transferId = activeTxToProduce.poolId ? Number(activeTxToProduce.poolId) : 1;
-        
-        session.transfer = TransferDeployItem.newTransfer(
-          amountMotes.toString(),
-          PublicKey.fromHex(POOL_TREASURY_PUBLIC_KEY),
-          undefined,
-          transferId
-        );
-      } else {
+      if (activeTxToProduce.type === 'Deposit' || activeTxToProduce.type === 'Withdraw' || activeTxToProduce.type === 'Rebalance' || activeTxToProduce.type === 'Deploy') {
         let cleanContractHash = contractHash.replace('hash-', '').replace('0x', '').trim();
         if (cleanContractHash.length === 66 && cleanContractHash.startsWith('cc')) {
           cleanContractHash = cleanContractHash.substring(2);
@@ -1022,6 +988,8 @@ export const TransactionProducerModal = () => {
           entrypoint,
           Args.fromMap(clArgsMap)
         );
+      } else {
+        throw new Error('Unsupported transaction type. Configure a contract call before broadcasting.');
       }
       
       const deploy = Deploy.makeDeploy(header, payment, session);
@@ -1044,18 +1012,12 @@ export const TransactionProducerModal = () => {
       addConsoleLog(' [Safety Audit] Standard payment limit argument verified.');
 
       // 2. Verify contract call or transfer session arguments are not empty
-      if (activeTxToProduce.type === 'Deposit') {
-        const transferArgs = serializeArgs(deploy.session?.transfer);
-        if (!transferArgs || transferArgs.length === 0) {
-          throw new Error("Serialization validation failed: Session transfer arguments are empty!");
-        }
-        addConsoleLog(` [Safety Audit] Native transfer session arguments verified (${transferArgs.length} compiled arguments detected).`);
-      } else {
+      {
         const sessionArgs = serializeArgs(deploy.session?.storedContractByHash);
         if (!sessionArgs || sessionArgs.length === 0) {
-          throw new Error("Serialization validation failed: Session contract arguments (amount/pool_id) are empty! Contract call must contain valid compiled arguments.");
+          throw new Error("Serialization validation failed: Session contract arguments are empty! Contract call must contain valid compiled arguments.");
         }
-        addConsoleLog(` [Safety Audit] Session contract arguments verified (${sessionArgs.length} compiled arguments detected).`);
+        addConsoleLog(` [Safety Audit] Stored contract call arguments verified (${sessionArgs.length} compiled arguments detected).`);
       }
 
       // 4. Only THEN validate the header account matches the connected wallet key
